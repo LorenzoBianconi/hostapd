@@ -10977,6 +10977,10 @@ static int nl80211_switch_channel(void *priv, struct csa_settings *settings)
 	if (ret)
 		goto error;
 
+	if (drv->nlmode == NL80211_IFTYPE_MESH_POINT) {
+		nla_put_flag(msg, NL80211_ATTR_HANDLE_DFS);
+	}
+
 	/* beacon_csa params */
 	beacon_csa = nla_nest_start(msg, NL80211_ATTR_CSA_IES);
 	if (!beacon_csa)
