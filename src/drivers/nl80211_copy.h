@@ -2570,6 +2570,10 @@ enum nl80211_commands {
  * @NL80211_ATTR_COLOR_CHANGE_ELEMS: Nested set of attributes containing the IE
  *	information for the time while performing a color switch.
  *
+ * @NL80211_ATTR_RADAR_OFFCHAN: Configure dedicated chain available for radar
+ *	detection on some hw. The chain can't be used to transmits or receives
+ *	frames. The driver is supposed to implement CAC management in sw or fw.
+ *
  * @NUM_NL80211_ATTR: total number of nl80211_attrs available
  * @NL80211_ATTR_MAX: highest attribute number currently defined
  * @__NL80211_ATTR_AFTER_LAST: internal use
@@ -3074,6 +3078,8 @@ enum nl80211_attrs {
 	NL80211_ATTR_COLOR_CHANGE_ELEMS,
 
 	NL80211_ATTR_WIPHY_ANTENNA_GAIN,
+
+	NL80211_ATTR_RADAR_OFFCHAN,
 
 	/* add attributes here, update the policy in nl80211.c */
 

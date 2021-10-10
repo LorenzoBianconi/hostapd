@@ -782,6 +782,11 @@ struct hostapd_freq_params {
 	 * for IEEE 802.11ay EDMG configuration.
 	 */
 	struct ieee80211_edmg_config edmg;
+
+	/**
+	 * radar_offchan - Whether radar/CAC offchannel is requested
+	 */
+	int radar_offchan;
 };
 
 /**

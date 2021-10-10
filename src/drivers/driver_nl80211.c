@@ -4896,6 +4896,7 @@ static int nl80211_put_freq_params(struct nl_msg *msg,
 	wpa_printf(MSG_DEBUG, "  * he_enabled=%d", freq->he_enabled);
 	wpa_printf(MSG_DEBUG, "  * vht_enabled=%d", freq->vht_enabled);
 	wpa_printf(MSG_DEBUG, "  * ht_enabled=%d", freq->ht_enabled);
+	wpa_printf(MSG_DEBUG, "  * radar_offchan=%d", freq->radar_offchan);
 
 	hw_mode = ieee80211_freq_to_chan(freq->freq, &channel);
 	is_24ghz = hw_mode == HOSTAPD_MODE_IEEE80211G ||
@@ -4973,6 +4974,9 @@ static int nl80211_put_freq_params(struct nl_msg *msg,
 				NL80211_CHAN_NO_HT))
 			return -ENOBUFS;
 	}
+	if (freq->radar_offchan)
+		nla_put_flag(msg, NL80211_ATTR_RADAR_OFFCHAN);
+
 	return 0;
 }
 
