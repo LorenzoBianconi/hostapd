@@ -2475,6 +2475,8 @@ static int hostapd_config_fill(struct hostapd_config *conf,
 		conf->ieee80211d = atoi(pos);
 	} else if (os_strcmp(buf, "ieee80211h") == 0) {
 		conf->ieee80211h = atoi(pos);
+	} else if (os_strcmp(buf, "radar_offchan") == 0) {
+		conf->radar_offchan = atoi(pos);
 	} else if (os_strcmp(buf, "ieee8021x") == 0) {
 		bss->ieee802_1x = atoi(pos);
 	} else if (os_strcmp(buf, "eapol_version") == 0) {

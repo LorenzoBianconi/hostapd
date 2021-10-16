@@ -794,6 +794,11 @@ static unsigned int dfs_get_cac_time(struct hostapd_iface *iface,
 	return cac_time_ms;
 }
 
+static int hostapd_is_radar_offchan_enabled(struct hostapd_iface *iface)
+{
+	return (iface->drv_flags2 & WPA_DRIVER_RADAR_OFFCHAN) &&
+	       iface->conf->radar_offchan;
+}
 
 /*
  * Main DFS handler
@@ -804,7 +809,7 @@ static unsigned int dfs_get_cac_time(struct hostapd_iface *iface,
 int hostapd_handle_dfs(struct hostapd_iface *iface)
 {
 	int res, n_chans, n_chans1, start_chan_idx, start_chan_idx1;
-	int skip_radar = 0;
+	int skip_radar = 0, radar_offchan;
 
 	if (is_6ghz_freq(iface->freq))
 		return 1;
@@ -866,9 +871,9 @@ int hostapd_handle_dfs(struct hostapd_iface *iface)
 
 	/* Finally start CAC */
 	hostapd_set_state(iface, HAPD_IFACE_DFS);
+	radar_offchan = hostapd_is_radar_offchan_enabled(iface);
 	wpa_printf(MSG_DEBUG, "DFS start CAC on %d MHz offchan %d",
-		   iface->freq,
-		   !!(iface->drv_flags2 & WPA_DRIVER_RADAR_OFFCHAN));
+		   iface->freq, radar_offchan);
 	wpa_msg(iface->bss[0]->msg_ctx, MSG_INFO, DFS_EVENT_CAC_START
 		"freq=%d chan=%d sec_chan=%d, width=%d, seg0=%d, seg1=%d, cac_time=%ds",
 		iface->freq,
@@ -886,14 +891,14 @@ int hostapd_handle_dfs(struct hostapd_iface *iface)
 		hostapd_get_oper_chwidth(iface->conf),
 		hostapd_get_oper_centr_freq_seg0_idx(iface->conf),
 		hostapd_get_oper_centr_freq_seg1_idx(iface->conf),
-		!!(iface->drv_flags2 & WPA_DRIVER_RADAR_OFFCHAN));
+		radar_offchan);
 
 	if (res) {
 		wpa_printf(MSG_ERROR, "DFS start_dfs_cac() failed, %d", res);
 		return -1;
 	}
 
-	if (iface->drv_flags2 & WPA_DRIVER_RADAR_OFFCHAN) {
+	if (radar_offchan) {
 		/* Cache offchannel radar parameters */
 		iface->radar_offchan.channel = iface->conf->channel;
 		iface->radar_offchan.secondary_channel =
@@ -1115,7 +1120,7 @@ int hostapd_dfs_complete_cac(struct hostapd_iface *iface, int success, int freq,
 			 * channel and configure offchannel chain to a new DFS
 			 * channel
 			 */
-			if ((iface->drv_flags2 & WPA_DRIVER_RADAR_OFFCHAN) &&
+			if (hostapd_is_radar_offchan_enabled(iface) &&
 			    hostapd_dfs_is_offchan_event(iface, freq)) {
 				iface->radar_offchan.cac_started = 0;
 				if (iface->radar_offchan.temp_ch) {
@@ -1141,7 +1146,7 @@ int hostapd_dfs_complete_cac(struct hostapd_iface *iface, int success, int freq,
 				iface->cac_started = 0;
 			}
 		}
-	} else if ((iface->drv_flags2 & WPA_DRIVER_RADAR_OFFCHAN) &&
+	} else if (hostapd_is_radar_offchan_enabled(iface) &&
 		   hostapd_dfs_is_offchan_event(iface, freq)) {
 		iface->radar_offchan.cac_started = 0;
 		hostpad_dfs_update_offchannel_chain(iface);
@@ -1257,7 +1262,7 @@ static int hostapd_dfs_start_channel_switch_cac(struct hostapd_iface *iface)
 static int
 hostapd_dfs_offchan_start_channel_switch(struct hostapd_iface *iface, int freq)
 {
-	if (!(iface->drv_flags2 & WPA_DRIVER_RADAR_OFFCHAN))
+	if (!hostapd_is_radar_offchan_enabled(iface))
 		return -1; /* Offchannel chain not supported */
 
 	wpa_printf(MSG_DEBUG,
