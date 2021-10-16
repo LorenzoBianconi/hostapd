@@ -798,6 +798,11 @@ static unsigned int dfs_get_cac_time(struct hostapd_iface *iface,
 	return cac_time_ms;
 }
 
+static int hostapd_is_radar_background_enabled(struct hostapd_iface *iface)
+{
+	return (iface->drv_flags2 & WPA_DRIVER_RADAR_BACKGROUND) &&
+	       iface->conf->radar_background;
+}
 
 /*
  * Main DFS handler
@@ -808,7 +813,7 @@ static unsigned int dfs_get_cac_time(struct hostapd_iface *iface,
 int hostapd_handle_dfs(struct hostapd_iface *iface)
 {
 	int res, n_chans, n_chans1, start_chan_idx, start_chan_idx1;
-	int skip_radar = 0;
+	int skip_radar = 0, radar_background;
 
 	if (is_6ghz_freq(iface->freq))
 		return 1;
@@ -870,9 +875,9 @@ int hostapd_handle_dfs(struct hostapd_iface *iface)
 
 	/* Finally start CAC */
 	hostapd_set_state(iface, HAPD_IFACE_DFS);
+	radar_background = hostapd_is_radar_background_enabled(iface);
 	wpa_printf(MSG_DEBUG, "DFS start CAC on %d MHz background %d",
-		   iface->freq,
-		   !!(iface->drv_flags2 & WPA_DRIVER_RADAR_BACKGROUND));
+		   iface->freq, radar_background);
 	wpa_msg(iface->bss[0]->msg_ctx, MSG_INFO, DFS_EVENT_CAC_START
 		"freq=%d chan=%d sec_chan=%d, width=%d, seg0=%d, seg1=%d, cac_time=%ds",
 		iface->freq,
@@ -890,14 +895,14 @@ int hostapd_handle_dfs(struct hostapd_iface *iface)
 		hostapd_get_oper_chwidth(iface->conf),
 		hostapd_get_oper_centr_freq_seg0_idx(iface->conf),
 		hostapd_get_oper_centr_freq_seg1_idx(iface->conf),
-		!!(iface->drv_flags2 & WPA_DRIVER_RADAR_BACKGROUND));
+		radar_background);
 
 	if (res) {
 		wpa_printf(MSG_ERROR, "DFS start_dfs_cac() failed, %d", res);
 		return -1;
 	}
 
-	if (iface->drv_flags2 & WPA_DRIVER_RADAR_BACKGROUND) {
+	if (radar_background) {
 		/* Cache background radar parameters */
 		iface->radar_background.channel = iface->conf->channel;
 		iface->radar_background.secondary_channel =
@@ -1120,7 +1125,7 @@ int hostapd_dfs_complete_cac(struct hostapd_iface *iface, int success, int freq,
 			 * channel and configure background chain to a new DFS
 			 * channel
 			 */
-			if ((iface->drv_flags2 & WPA_DRIVER_RADAR_BACKGROUND) &&
+			if (hostapd_is_radar_background_enabled(iface) &&
 			    hostapd_dfs_is_background_event(iface, freq)) {
 				iface->radar_background.cac_started = 0;
 				if (!iface->radar_background.temp_ch)
@@ -1146,7 +1151,7 @@ int hostapd_dfs_complete_cac(struct hostapd_iface *iface, int success, int freq,
 				iface->cac_started = 0;
 			}
 		}
-	} else if ((iface->drv_flags2 & WPA_DRIVER_RADAR_BACKGROUND) &&
+	} else if (hostapd_is_radar_background_enabled(iface) &&
 		   hostapd_dfs_is_background_event(iface, freq)) {
 		iface->radar_background.cac_started = 0;
 		hostpad_dfs_update_background_chain(iface);
@@ -1263,7 +1268,7 @@ static int
 hostapd_dfs_background_start_channel_switch(struct hostapd_iface *iface,
 					    int freq)
 {
-	if (!(iface->drv_flags2 & WPA_DRIVER_RADAR_BACKGROUND))
+	if (!hostapd_is_radar_background_enabled(iface))
 		return -1; /* Background radar chain not supported */
 
 	wpa_printf(MSG_DEBUG,
