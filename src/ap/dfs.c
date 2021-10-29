@@ -1254,6 +1254,45 @@ static int hostapd_dfs_start_channel_switch_cac(struct hostapd_iface *iface)
 	return err;
 }
 
+static int
+hostapd_dfs_offchan_start_channel_switch(struct hostapd_iface *iface, int freq)
+{
+	if (!(iface->drv_flags2 & WPA_DRIVER_RADAR_OFFCHAN))
+		return -1; /* Offchannel chain not supported */
+
+	wpa_printf(MSG_DEBUG,
+		   "%s called (offchannel CAC active: %s, CSA active: %s)",
+		   __func__, iface->radar_offchan.cac_started ? "yes" : "no",
+		   hostapd_csa_in_progress(iface) ? "yes" : "no");
+
+	/* Check if CSA in progress */
+	if (hostapd_csa_in_progress(iface))
+		return 0;
+
+	/*
+	 * If offchannel radar detation is supported and radar channel
+	 * monitored by offchain is available switch to it without waiting
+	 * for the CAC otherwise let's keep a random channel.
+	 * If radar pattern is reported on offchannel chain, just switch to
+	 * monitor another radar channel.
+	 */
+	if (hostapd_dfs_is_offchan_event(iface, freq)) {
+		hostpad_dfs_update_offchannel_chain(iface);
+		return 0;
+	}
+
+	/* Offchannel not availanle yet. Perform CAC on main chain */
+	if (iface->radar_offchan.cac_started) {
+		/* We want to switch to monitored channel as soon as
+		 * CAC is completed.
+		 */
+		iface->radar_offchan.temp_ch = 1;
+		return -1;
+	}
+
+	return hostapd_dfs_start_channel_switch_offchan(iface);
+}
+
 static int hostapd_dfs_start_channel_switch(struct hostapd_iface *iface)
 {
 	struct hostapd_channel_data *channel;
@@ -1354,15 +1393,19 @@ int hostapd_dfs_radar_detected(struct hostapd_iface *iface, int freq,
 	if (!res)
 		return 0;
 
-	/* Skip if reported radar event not overlapped our channels */
-	res = dfs_are_channels_overlapped(iface, freq, chan_width, cf1, cf2);
-	if (!res)
-		return 0;
+	if (!hostapd_dfs_is_offchan_event(iface, freq)) {
+		/* Skip if reported radar event not overlapped our channels */
+		res = dfs_are_channels_overlapped(iface, freq, chan_width,
+						  cf1, cf2);
+		if (!res)
+			return 0;
+	}
 
-	/* radar detected while operating, switch the channel. */
-	res = hostapd_dfs_start_channel_switch(iface);
+	if (hostapd_dfs_offchan_start_channel_switch(iface, freq))
+		/* radar detected while operating, switch the channel. */
+		return hostapd_dfs_start_channel_switch(iface);
 
-	return res;
+	return 0;
 }
 
 
