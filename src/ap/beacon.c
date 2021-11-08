@@ -578,8 +578,17 @@ static u8 * hostapd_gen_probe_resp(struct hostapd_data *hapd,
 
 #ifdef CONFIG_IEEE80211AX
 	if (hapd->iconf->ieee80211ax && !hapd->conf->disable_11ax) {
+		u8 *cca_pos;
+
 		pos = hostapd_eid_he_capab(hapd, pos, IEEE80211_MODE_AP);
 		pos = hostapd_eid_he_operation(hapd, pos);
+
+		/* CCA IE */
+		cca_pos = hostapd_eid_cca(hapd, pos);
+		if (cca_pos != pos)
+			hapd->cca_c_off_proberesp = cca_pos - (u8 *) resp - 2;
+		pos = cca_pos;
+
 		pos = hostapd_eid_spatial_reuse(hapd, pos);
 		pos = hostapd_eid_he_mu_edca_parameter_set(hapd, pos);
 		pos = hostapd_eid_he_6ghz_band_cap(hapd, pos);
@@ -1600,9 +1609,18 @@ int ieee802_11_build_ap_params(struct hostapd_data *hapd,
 
 #ifdef CONFIG_IEEE80211AX
 	if (hapd->iconf->ieee80211ax && !hapd->conf->disable_11ax) {
+		u8 *cca_pos;
+
 		tailpos = hostapd_eid_he_capab(hapd, tailpos,
 					       IEEE80211_MODE_AP);
 		tailpos = hostapd_eid_he_operation(hapd, tailpos);
+
+		/* CCA IE */
+		cca_pos = hostapd_eid_cca(hapd, tailpos);
+		if (cca_pos != tailpos)
+			hapd->cca_c_off_beacon = cca_pos - tail - 2;
+		tailpos = cca_pos;
+
 		tailpos = hostapd_eid_spatial_reuse(hapd, tailpos);
 		tailpos = hostapd_eid_he_mu_edca_parameter_set(hapd, tailpos);
 		tailpos = hostapd_eid_he_6ghz_band_cap(hapd, tailpos);
