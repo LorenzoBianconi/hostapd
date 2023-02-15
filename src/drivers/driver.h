@@ -829,6 +829,11 @@ struct hostapd_freq_params {
 	 * eht_enabled - Whether EHT is enabled
 	 */
 	bool eht_enabled;
+
+	/**
+	 * if >=0 indicates the link of the MLD AP to configure.
+	 */
+	int link_id;
 };
 
 /**
