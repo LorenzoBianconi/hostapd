@@ -1538,12 +1538,26 @@ static void hostapd_mgmt_tx_cb(struct hostapd_data *hapd, const u8 *buf,
 			       size_t len, u16 stype, int ok)
 {
 	struct ieee80211_hdr *hdr;
-	struct hostapd_data *orig_hapd = hapd;
+	struct hostapd_data *orig_hapd = hapd, *tmp_hapd;
 
 	hdr = (struct ieee80211_hdr *) buf;
-	hapd = get_hapd_bssid(hapd->iface, get_hdr_bssid(hdr, len));
-	if (!hapd)
-		return;
+	tmp_hapd = get_hapd_bssid(hapd->iface, get_hdr_bssid(hdr, len));
+	if (tmp_hapd) {
+		hapd = tmp_hapd;
+	} else {
+		bool mld_ap_match = false;
+
+#ifdef CONFIG_IEEE80211BE
+		mld_ap_match = (hapd->conf->mld_ap &&
+				!os_memcmp(hapd->mld_addr,
+					   get_hdr_bssid(hdr, len),
+					   ETH_ALEN));
+#endif /* CONFIG_IEEE80211BE */
+
+		if (!mld_ap_match)
+			return;
+	}
+
 	if (hapd == HAPD_BROADCAST) {
 		if (stype != WLAN_FC_STYPE_ACTION || len <= 25 ||
 		    buf[24] != WLAN_ACTION_PUBLIC)
