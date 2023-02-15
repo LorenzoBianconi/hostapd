@@ -4622,6 +4622,7 @@ static u16 send_assoc_resp(struct hostapd_data *hapd, struct sta_info *sta,
 	struct ieee80211_mgmt *reply;
 	u8 *p;
 	u16 res = WLAN_STATUS_SUCCESS;
+	const u8 *sa = hapd->own_addr;
 
 	buflen = sizeof(struct ieee80211_mgmt) + 1024;
 #ifdef CONFIG_FILS
@@ -4657,9 +4658,19 @@ static u16 send_assoc_resp(struct hostapd_data *hapd, struct sta_info *sta,
 		IEEE80211_FC(WLAN_FC_TYPE_MGMT,
 			     (reassoc ? WLAN_FC_STYPE_REASSOC_RESP :
 			      WLAN_FC_STYPE_ASSOC_RESP));
+
+#ifdef CONFIG_IEEE80211BE
+	/*
+	 * Once an non-AP MLD station is added to the driver, the addressing
+	 * should use MLD address.
+	 */
+	if (hapd->conf->mld_ap && sta && sta->mld_info.mld_sta)
+		sa = hapd->mld_addr;
+#endif /* CONFIG_IEEE80211BE */
+
 	os_memcpy(reply->da, addr, ETH_ALEN);
-	os_memcpy(reply->sa, hapd->own_addr, ETH_ALEN);
-	os_memcpy(reply->bssid, hapd->own_addr, ETH_ALEN);
+	os_memcpy(reply->sa, sa, ETH_ALEN);
+	os_memcpy(reply->bssid, sa, ETH_ALEN);
 
 	send_len = IEEE80211_HDRLEN;
 	send_len += sizeof(reply->u.assoc_resp);
@@ -4795,6 +4806,8 @@ rsnxe_done:
 
 #ifdef CONFIG_IEEE80211BE
 	if (hapd->iconf->ieee80211be && !hapd->conf->disable_11be) {
+		if (hapd->conf->mld_ap)
+			p = hostapd_eid_eht_basic_ml(hapd, p, sta, false);
 		p = hostapd_eid_eht_capab(hapd, p, IEEE80211_MODE_AP);
 		p = hostapd_eid_eht_operation(hapd, p);
 	}
