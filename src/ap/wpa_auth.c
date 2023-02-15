@@ -1080,9 +1080,15 @@ void wpa_receive(struct wpa_authenticator *wpa_auth,
 	const u8 *key_data;
 	size_t keyhdrlen, mic_len;
 	u8 *mic;
+	u8 is_mld = 0;
 
 	if (!wpa_auth || !wpa_auth->conf.wpa || !sm)
 		return;
+
+#ifdef CONFIG_IEEE80211BE
+	is_mld = (sm->mld_assoc_link_id >= 0);
+#endif /* CONFIG_IEEE80211BE */
+
 	wpa_hexdump(MSG_MSGDUMP, "WPA: RX EAPOL data", data, data_len);
 
 	mic_len = wpa_mic_len(sm->wpa_key_mgmt, sm->pmk_len);
@@ -1160,7 +1166,8 @@ void wpa_receive(struct wpa_authenticator *wpa_auth,
 		msgtxt = "2/2 Group";
 	} else if (key_data_length == 0 ||
 		   (mic_len == 0 && (key_info & WPA_KEY_INFO_ENCR_KEY_DATA) &&
-		    key_data_length == AES_BLOCK_SIZE)) {
+		    key_data_length == AES_BLOCK_SIZE) ||
+		   (is_mld && (key_info & WPA_KEY_INFO_SECURE))) {
 		msg = PAIRWISE_4;
 		msgtxt = "4/4 Pairwise";
 	} else {
@@ -4324,11 +4331,70 @@ done:
 	os_free(wpa_ie_buf2);
 }
 
+static int wpa_auth_validate_ml_kdes_m4(struct wpa_state_machine *sm)
+{
+#ifdef CONFIG_IEEE80211BE
+	struct ieee802_1x_hdr *hdr;
+	struct wpa_eapol_key *key;
+	struct wpa_eapol_ie_parse kde;
+	const u8 *key_data, *mic;
+	u16 key_data_length;
+	size_t mic_len;
+
+	if (sm->mld_assoc_link_id < 0)
+		return 0;
+
+	/*
+	 * Note: last_rx_eapol_key length fields have already been validated in
+	 * wpa_receive().
+	 */
+	mic_len = wpa_mic_len(sm->wpa_key_mgmt, sm->pmk_len);
+
+	hdr = (struct ieee802_1x_hdr *)sm->last_rx_eapol_key;
+	key = (struct wpa_eapol_key *)((void *)(hdr + 1));
+	mic = (u8 *)(key + 1);
+	key_data = mic + mic_len + 2;
+	key_data_length = WPA_GET_BE16(mic + mic_len);
+	if (key_data_length > sm->last_rx_eapol_key_len - sizeof(*hdr) -
+	    sizeof(*key) - mic_len - 2)
+		return -1;
+
+	if (wpa_parse_kde_ies(key_data, key_data_length, &kde) < 0) {
+		wpa_auth_vlogger(sm->wpa_auth, wpa_auth_get_spa(sm),
+				 LOGGER_INFO,
+				 "received EAPOL-Key msg 4/4 with invalid Key Data contents");
+		return -1;
+	}
+
+	/* MLD MAC address must be the same */
+	if (!kde.mac_addr ||
+	    os_memcmp(kde.mac_addr, sm->peer_mld_addr, ETH_ALEN)) {
+		wpa_printf(MSG_DEBUG,
+			   "WPA_AUTH: MLD: invalid MLD address in msg 4/4");
+		return -1;
+	}
+
+	wpa_printf(MSG_DEBUG,
+		   "WPA_AUTH: MLD: MLD address in message 4/4: " MACSTR,
+		   MAC2STR(kde.mac_addr));
+
+#endif /* CONFIG_IEEE80211BE */
+
+	return 0;
+}
+
 
 SM_STATE(WPA_PTK, PTKINITDONE)
 {
 	SM_ENTRY_MA(WPA_PTK, PTKINITDONE, wpa_ptk);
 	sm->EAPOLKeyReceived = false;
+
+	if (wpa_auth_validate_ml_kdes_m4(sm) < 0) {
+		wpa_sta_disconnect(sm->wpa_auth, sm->addr,
+				   WLAN_REASON_PREV_AUTH_NOT_VALID);
+		return;
+	}
+
 	if (sm->Pair) {
 		enum wpa_alg alg = wpa_cipher_to_alg(sm->pairwise);
 		int klen = wpa_cipher_key_len(sm->pairwise);
