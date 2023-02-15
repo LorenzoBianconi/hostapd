@@ -6045,6 +6045,97 @@ static void hostapd_set_wds_encryption(struct hostapd_data *hapd,
 }
 
 
+#ifdef CONFIG_IEEE80211BE
+
+static void ieee80211_ml_link_sta_assoc_cb(struct hostapd_data *hapd,
+					   struct sta_info *origin_sta,
+					   struct sta_info *sta,
+					   int reassoc,
+					   struct mld_link_info *link,
+					   int ok)
+{
+	if (!ok) {
+		hostapd_logger(hapd, link->peer_addr, HOSTAPD_MODULE_IEEE80211,
+			       HOSTAPD_LEVEL_DEBUG,
+			       "did not acknowledge association response");
+		sta->flags &= ~WLAN_STA_ASSOC_REQ_OK;
+
+		/* The STA is added only in case of SUCCESS */
+		if (link->status == WLAN_STATUS_SUCCESS)
+			hostapd_drv_sta_remove(hapd, sta->addr);
+
+		return;
+	}
+
+	if (link->status != WLAN_STATUS_SUCCESS)
+		return;
+
+	sta->flags |= WLAN_STA_ASSOC;
+	sta->flags &= ~WLAN_STA_WNM_SLEEP_MODE;
+
+	if (!hapd->conf->ieee802_1x && !hapd->conf->wpa)
+		ap_sta_set_authorized(hapd, sta, 1);
+
+	hostapd_set_sta_flags(hapd, sta);
+
+	/*
+	 * TODOs:
+	 * - 802.1X port enablement is not needed as done on the station doing
+	 *     the connection.
+	 * - Not handling accouting
+	 * - Need to handle VLAN configuration
+	 */
+}
+
+#endif /* CONFIG_IEEE80211BE */
+
+
+static void hostapd_ml_handle_assoc_cb(struct hostapd_data *hapd,
+				       struct sta_info *sta,
+				       int reassoc, int ok)
+{
+#ifdef CONFIG_IEEE80211BE
+	u8 i, link_id;
+
+	if (!hostapd_is_mld_ap(hapd))
+		return;
+
+	for (link_id = 0; link_id < MAX_NUM_MLD_LINKS; link_id++) {
+		struct mld_link_info *link = &sta->mld_info.links[link_id];
+
+		if (!link->valid)
+			continue;
+
+		for (i = 0; i < hapd->iface->interfaces->count; i++) {
+			struct sta_info *tmp_sta;
+			struct hostapd_data *tmp_hapd =
+				hapd->iface->interfaces->iface[i]->bss[0];
+
+			if (tmp_hapd->conf->mld_ap ||
+			    hapd->conf->mld_id != tmp_hapd->conf->mld_id)
+				continue;
+
+			for (tmp_sta = tmp_hapd->sta_list; tmp_sta;
+			     tmp_sta = tmp_sta->next) {
+				if (tmp_sta == sta ||
+				    tmp_sta->mld_assoc_link_id !=
+				    sta->mld_assoc_link_id ||
+				    tmp_sta->aid != sta->aid)
+					continue;
+
+				ieee80211_ml_link_sta_assoc_cb(tmp_hapd,
+							       sta, tmp_sta,
+							       reassoc,
+							       link,
+							       ok);
+				break;
+			}
+		}
+	}
+#endif /* CONFIG_IEEE80211BE */
+}
+
+
 static void handle_assoc_cb(struct hostapd_data *hapd,
 			    const struct ieee80211_mgmt *mgmt,
 			    size_t len, int reassoc, int ok)
@@ -6059,6 +6150,16 @@ static void handle_assoc_cb(struct hostapd_data *hapd,
 			   MAC2STR(mgmt->da));
 		return;
 	}
+
+#ifdef CONFIG_IEEE80211BE
+	if (hapd->conf->mld_ap &&
+	    hapd->conf->mld_link_id != sta->mld_assoc_link_id) {
+		wpa_printf(MSG_INFO,
+			   "handle_assoc_cb: MLD: ignore on link station");
+		return;
+	}
+
+#endif /* CONFIG_IEEE80211BE */
 
 	if (len < IEEE80211_HDRLEN + (reassoc ? sizeof(mgmt->u.reassoc_resp) :
 				      sizeof(mgmt->u.assoc_resp))) {
@@ -6083,11 +6184,11 @@ static void handle_assoc_cb(struct hostapd_data *hapd,
 		if (status == WLAN_STATUS_SUCCESS)
 			hostapd_drv_sta_remove(hapd, sta->addr);
 
-		return;
+		goto handle_ml;
 	}
 
 	if (status != WLAN_STATUS_SUCCESS)
-		return;
+		goto handle_ml;
 
 	/* Stop previous accounting session, if one is started, and allocate
 	 * new session id for the new session. */
@@ -6129,11 +6230,11 @@ static void handle_assoc_cb(struct hostapd_data *hapd,
 		 * interface selection is not going to change anymore.
 		 */
 		if (ap_sta_bind_vlan(hapd, sta) < 0)
-			return;
+			goto handle_ml;
 	} else if (sta->vlan_id) {
 		/* VLAN ID already set (e.g., by PMKSA caching), so bind STA */
 		if (ap_sta_bind_vlan(hapd, sta) < 0)
-			return;
+			goto handle_ml;
 	}
 
 	hostapd_set_sta_flags(hapd, sta);
@@ -6197,6 +6298,9 @@ static void handle_assoc_cb(struct hostapd_data *hapd,
 		os_free(sta->pending_eapol_rx);
 		sta->pending_eapol_rx = NULL;
 	}
+
+handle_ml:
+	hostapd_ml_handle_assoc_cb(hapd, sta, reassoc, ok);
 }
 
 
