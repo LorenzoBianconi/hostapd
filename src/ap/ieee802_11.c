@@ -4241,6 +4241,21 @@ static int add_associated_sta(struct hostapd_data *hapd,
 	struct ieee80211_he_capabilities he_cap;
 	struct ieee80211_eht_capabilities eht_cap;
 	int set = 1;
+	const u8 *mld_link_addr = NULL;
+	bool mld_link_sta = false;
+
+#ifdef CONFIG_IEEE80211BE
+	if (hapd->conf->mld_ap && sta->mld_info.mld_sta) {
+		u8 mld_link_id = hapd->conf->mld_link_id;
+
+		mld_link_sta = sta->mld_assoc_link_id != mld_link_id;
+		mld_link_addr =
+			sta->mld_info.links[mld_link_id].peer_addr;
+
+		if (hapd->conf->mld_link_id != sta->mld_assoc_link_id)
+			set = 0;
+	}
+#endif /* CONFIG_IEEE80211BE */
 
 	/*
 	 * Remove the STA entry to ensure the STA PS state gets cleared and
@@ -4269,7 +4284,7 @@ static int add_associated_sta(struct hostapd_data *hapd,
 		   wpa_auth_sta_ft_tk_already_set(sta->wpa_sm),
 		   wpa_auth_sta_fils_tk_already_set(sta->wpa_sm));
 
-	if (!sta->added_unassoc &&
+	if (!mld_link_sta && !sta->added_unassoc &&
 	    (!(sta->flags & WLAN_STA_AUTHORIZED) ||
 	     (reassoc && sta->ft_over_ds && sta->auth_alg == WLAN_AUTH_FT) ||
 	     (!wpa_auth_sta_ft_tk_already_set(sta->wpa_sm) &&
@@ -4307,7 +4322,8 @@ static int add_associated_sta(struct hostapd_data *hapd,
 	 * will be set when the ACK frame for the (Re)Association Response frame
 	 * is processed (TX status driver event).
 	 */
-	if (hostapd_sta_add(hapd, sta->addr, sta->aid, sta->capability,
+	if (hostapd_sta_add(hapd, sta->addr,
+			    sta->aid, sta->capability,
 			    sta->supported_rates, sta->supported_rates_len,
 			    sta->listen_interval,
 			    sta->flags & WLAN_STA_HT ? &ht_cap : NULL,
@@ -4319,7 +4335,7 @@ static int add_associated_sta(struct hostapd_data *hapd,
 			    sta->he_6ghz_capab,
 			    sta->flags | WLAN_STA_ASSOC, sta->qosinfo,
 			    sta->vht_opmode, sta->p2p_ie ? 1 : 0,
-			    set)) {
+			    set, mld_link_addr, mld_link_sta)) {
 		hostapd_logger(hapd, sta->addr,
 			       HOSTAPD_MODULE_IEEE80211, HOSTAPD_LEVEL_NOTICE,
 			       "Could not %s STA to kernel driver",
