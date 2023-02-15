@@ -1416,6 +1416,35 @@ static void hostapd_action_rx(struct hostapd_data *hapd,
 #endif /* NEED_AP_MLME */
 
 
+#ifdef CONFIG_IEEE80211BE
+static struct hostapd_data *switch_link_hapd(struct hostapd_data *hapd, int link_id)
+{
+	if (hapd->conf->mld_ap && link_id >= 0) {
+		int i;
+
+		for (i = 0; i < hapd->iface->interfaces->count; i++) {
+			struct hostapd_iface *h = hapd->iface->interfaces->iface[i];
+			struct hostapd_data *h_hapd = h->bss[0];
+			struct hostapd_bss_config *hconf = h_hapd->conf;
+
+			if (h == hapd->iface)
+				continue;
+
+			if (!hconf->mld_ap || hconf->mld_id != hapd->conf->mld_id) {
+				wpa_printf(MSG_ERROR,
+					   "Skip non matching mld_id");
+				continue;
+			}
+
+			if (hconf->mld_link_id == link_id)
+				return h_hapd;
+		}
+	}
+	return hapd;
+}
+#endif /* CONFIG_IEEE80211BE */
+
+
 #ifdef NEED_AP_MLME
 
 #define HAPD_BROADCAST ((struct hostapd_data *) -1)
@@ -1454,12 +1483,18 @@ static void hostapd_rx_from_unknown_sta(struct hostapd_data *hapd,
 
 static int hostapd_mgmt_rx(struct hostapd_data *hapd, struct rx_mgmt *rx_mgmt)
 {
-	struct hostapd_iface *iface = hapd->iface;
+	struct hostapd_iface *iface;
 	const struct ieee80211_hdr *hdr;
 	const u8 *bssid;
 	struct hostapd_frame_info fi;
 	int ret;
 	bool is_mld = false;
+
+#ifdef CONFIG_IEEE80211BE
+	hapd = switch_link_hapd(hapd, rx_mgmt->link_id);
+#endif /* CONFIG_IEEE80211BE */
+
+	iface = hapd->iface;
 
 #ifdef CONFIG_TESTING_OPTIONS
 	if (hapd->ext_mgmt_frame_handling) {
@@ -1600,11 +1635,18 @@ static int hostapd_event_new_sta(struct hostapd_data *hapd, const u8 *addr)
 
 static void hostapd_event_eapol_rx(struct hostapd_data *hapd, const u8 *src,
 				   const u8 *data, size_t data_len,
-				   enum frame_encryption encrypted)
+				   enum frame_encryption encrypted,
+				   int link_id)
 {
-	struct hostapd_iface *iface = hapd->iface;
+	struct hostapd_iface *iface;
 	struct sta_info *sta;
 	size_t j;
+
+#ifdef CONFIG_IEEE80211BE
+	hapd = switch_link_hapd(hapd, link_id);
+#endif /* CONFIG_IEEE80211BE */
+
+	iface = hapd->iface;
 
 	for (j = 0; j < iface->num_bss; j++) {
 		sta = ap_get_sta(iface->bss[j], src);
@@ -2007,7 +2049,8 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
 		hostapd_event_eapol_rx(hapd, data->eapol_rx.src,
 				       data->eapol_rx.data,
 				       data->eapol_rx.data_len,
-				       data->eapol_rx.encrypted);
+				       data->eapol_rx.encrypted,
+				       data->eapol_rx.link_id);
 		break;
 	case EVENT_ASSOC:
 		if (!data)
