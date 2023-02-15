@@ -3378,13 +3378,23 @@ int hostapd_remove_iface(struct hapd_interfaces *interfaces, char *buf)
 void hostapd_new_assoc_sta(struct hostapd_data *hapd, struct sta_info *sta,
 			   int reassoc)
 {
+	s8 mld_assoc_link_id = -1;
+
 	if (hapd->tkip_countermeasures) {
 		hostapd_drv_sta_deauth(hapd, sta->addr,
 				       WLAN_REASON_MICHAEL_MIC_FAILURE);
 		return;
 	}
 
-	hostapd_prune_associations(hapd, sta->addr);
+#ifdef CONFIG_IEEE80211BE
+	if (hapd->conf->mld_ap && sta->mld_info.mld_sta) {
+		mld_assoc_link_id = sta->mld_assoc_link_id;
+		if (sta->mld_assoc_link_id != hapd->conf->mld_link_id)
+			return;
+	}
+#endif /* CONFIG_IEEE80211BE */
+
+	hostapd_prune_associations(hapd, sta->addr, mld_assoc_link_id);
 	ap_sta_clear_disconnect_timeouts(hapd, sta);
 	sta->post_csa_sa_query = 0;
 
