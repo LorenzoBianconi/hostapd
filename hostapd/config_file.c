@@ -4770,6 +4770,16 @@ static int hostapd_config_fill(struct hostapd_config *conf,
 			return 1;
 		}
 		conf->punct_acs_threshold = val;
+	} else if (os_strcmp(buf, "mld_ap") == 0) {
+		bss->mld_ap = !!atoi(pos);
+	} else if (os_strcmp(buf, "mld_id") == 0) {
+		bss->mld_id = atoi(pos);
+	} else if (os_strcmp(buf, "mld_link_id") == 0) {
+		bss->mld_link_id = atoi(pos);
+	} else if (os_strcmp(buf, "mld_eml_capa") == 0) {
+		bss->mld_eml_capa = atoi(pos);
+	} else if (os_strcmp(buf, "mld_mld_capa") == 0) {
+		bss->mld_mld_capa = atoi(pos);
 #endif /* CONFIG_IEEE80211BE */
 	} else {
 		wpa_printf(MSG_ERROR,
