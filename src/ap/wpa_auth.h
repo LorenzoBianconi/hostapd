@@ -392,6 +392,7 @@ struct wpa_auth_callbacks {
 #endif /* CONFIG_PASN */
 #ifdef CONFIG_IEEE80211BE
 	int (*get_ml_rsn_info)(void *ctx, struct wpa_auth_ml_rsn_info *info);
+	int (*get_ml_key_info)(void *ctx, struct wpa_auth_ml_key_info *info);
 #endif /* CONFIG_IEEE80211BE */
 };
 
@@ -637,4 +638,7 @@ void wpa_auth_set_ml_info(struct wpa_state_machine *sm,
 			  struct mld_info *info);
 void wpa_auth_ml_get_rsn_info(struct wpa_authenticator *a,
 			      struct wpa_auth_ml_link_rsn_info *info);
+void wpa_auth_ml_get_info(struct wpa_authenticator *a,
+			  struct wpa_auth_ml_link_key_info *info,
+			  bool mgmt_frame_prot, bool beacon_prot);
 #endif /* WPA_AUTH_H */
