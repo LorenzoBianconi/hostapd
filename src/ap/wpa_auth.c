@@ -33,6 +33,7 @@
 #include "pmksa_cache_auth.h"
 #include "wpa_auth_i.h"
 #include "wpa_auth_ie.h"
+#include "sta_info.h"
 
 #define STATE_MACHINE_DATA struct wpa_state_machine
 #define STATE_MACHINE_DEBUG_PREFIX "WPA"
@@ -695,6 +696,7 @@ wpa_auth_sta_init(struct wpa_authenticator *wpa_auth, const u8 *addr,
 	sm->wpa_auth = wpa_auth;
 	sm->group = wpa_auth->group;
 	wpa_group_get(sm->wpa_auth, sm->group);
+	sm->mld_assoc_link_id = -1;
 
 	return sm;
 }
@@ -788,6 +790,11 @@ static void wpa_free_sta_sm(struct wpa_state_machine *sm)
 #ifdef CONFIG_DPP2
 	wpabuf_clear_free(sm->dpp_z);
 #endif /* CONFIG_DPP2 */
+	os_memset(sm->own_mld_addr, 0, sizeof(sm->own_mld_addr));
+	os_memset(sm->peer_mld_addr, 0, sizeof(sm->peer_mld_addr));
+	sm->mld_assoc_link_id = -1;
+	os_memset(sm->mld_links, 0, sizeof(sm->mld_links));
+
 	bin_clear_free(sm, sizeof(*sm));
 }
 
@@ -3589,6 +3596,29 @@ static u8 * replace_ie(const char *name, const u8 *old_buf, size_t *len, u8 eid,
 }
 #endif /* CONFIG_TESTING_OPTIONS */
 
+#ifdef CONFIG_IEEE80211BE
+
+void wpa_auth_ml_get_rsn_info(struct wpa_authenticator *a,
+			      struct wpa_auth_ml_link_rsn_info *info)
+{
+	info->rsn_ies = a->wpa_ie;
+	info->rsn_ies_len = a->wpa_ie_len;
+
+	wpa_printf(MSG_DEBUG,
+		   "WPA_AUTH: MLD: RSN info: link_id=%u, rsn_ies_len=%u",
+		   info->link_id, info->rsn_ies_len);
+}
+
+
+static void wpa_auth_get_ml_rsn_info(struct wpa_authenticator *wpa_auth,
+				     struct wpa_auth_ml_rsn_info *info)
+{
+	if (!wpa_auth->cb->get_ml_rsn_info)
+		return;
+
+	wpa_auth->cb->get_ml_rsn_info(wpa_auth->cb_ctx, info);
+}
+#endif /* CONFIG_IEEE80211BE */
 
 SM_STATE(WPA_PTK, PTKINITNEGOTIATING)
 {
@@ -6025,4 +6055,85 @@ void wpa_auth_sta_radius_psk_resp(struct wpa_state_machine *sm, bool success)
 	}
 
 	eloop_register_timeout(0, 0, wpa_sm_call_step, sm, NULL);
+}
+
+
+void wpa_auth_set_ml_info(struct wpa_state_machine *sm,
+			  const u8 *mld_addr, u8 mld_assoc_link_id,
+			  struct mld_info *info)
+{
+#ifdef CONFIG_IEEE80211BE
+	struct wpa_auth_ml_rsn_info ml_rsn_info;
+	u32 link_id, i;
+
+	if (!info)
+		return;
+
+	os_memset(sm->mld_links, 0, sizeof(sm->mld_links));
+
+	wpa_auth_logger(sm->wpa_auth, wpa_auth_get_spa(sm), LOGGER_DEBUG,
+			"MLD: initialization");
+
+	os_memcpy(sm->own_mld_addr, mld_addr, ETH_ALEN);
+	os_memcpy(sm->peer_mld_addr, info->common_info.mld_addr, ETH_ALEN);
+
+	sm->mld_assoc_link_id = mld_assoc_link_id;
+
+	os_memset(&ml_rsn_info, 0, sizeof(ml_rsn_info));
+
+	for (i = 0, link_id = 0; link_id < MAX_NUM_MLD_LINKS; link_id++) {
+		struct mld_link_info *link = &info->links[link_id];
+		struct mld_link *sm_link = &sm->mld_links[link_id];
+
+		sm_link->valid = link->valid;
+
+		if (!link->valid)
+			continue;
+
+		os_memcpy(sm_link->peer_addr, link->peer_addr, ETH_ALEN);
+		os_memcpy(sm_link->own_addr, link->local_addr, ETH_ALEN);
+
+		wpa_printf(MSG_DEBUG,
+			   "WPA_AUTH: MLD: id=%u, addr=" MACSTR " peer=" MACSTR,
+			   link_id,
+			   MAC2STR(sm_link->own_addr),
+			   MAC2STR(sm_link->peer_addr));
+
+		if (link_id != mld_assoc_link_id)
+			sm->n_mld_affiliated_links++;
+
+		ml_rsn_info.links[i++].link_id = link_id;
+	}
+
+	ml_rsn_info.n_mld_links = i;
+
+	wpa_auth_get_ml_rsn_info(sm->wpa_auth, &ml_rsn_info);
+
+	for (i = 0; i < ml_rsn_info.n_mld_links; i++) {
+		u8 link_id = ml_rsn_info.links[i].link_id;
+		struct mld_link *sm_link = &sm->mld_links[link_id];
+		const u8 *rsn_ies;
+		u8 rsn_ies_len;
+
+		rsn_ies = ml_rsn_info.links[i].rsn_ies;
+		rsn_ies_len = ml_rsn_info.links[i].rsn_ies_len;
+
+		/* This should not really happen */
+		if (!rsn_ies || rsn_ies_len < 2 || rsn_ies[0] != WLAN_EID_RSN) {
+			wpa_printf(MSG_DEBUG,
+				   "WPA_AUTH: MLD: Invalid RSN element");
+			continue;
+		}
+
+		sm_link->rsne = rsn_ies;
+		sm_link->rsne_len = rsn_ies[1] + 2;
+
+		if (rsn_ies[1] + 2UL + 2UL < rsn_ies_len &&
+		    rsn_ies[rsn_ies[1] + 2] == WLAN_EID_RSNX) {
+			sm_link->rsnxe = rsn_ies + 2 + rsn_ies[1];
+			sm_link->rsnxe_len = sm_link->rsnxe[1] + 2;
+		}
+	}
+
+#endif /* CONFIG_IEEE80211BE */
 }
