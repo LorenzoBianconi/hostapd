@@ -85,13 +85,15 @@ static const int dot11RSNAConfigSATimeout = 60;
 
 static const u8 * wpa_auth_get_aa(const struct wpa_state_machine *sm)
 {
-	return sm->wpa_auth->addr;
+	return (sm && sm->mld_assoc_link_id >= 0) ?
+		sm->own_mld_addr : sm->wpa_auth->addr;
 }
 
 
 static const u8 * wpa_auth_get_spa(const struct wpa_state_machine *sm)
 {
-	return sm->addr;
+	return sm->mld_assoc_link_id >= 0 ?
+		sm->peer_mld_addr : sm->addr;
 }
 
 
