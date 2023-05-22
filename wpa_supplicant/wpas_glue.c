@@ -118,7 +118,7 @@ int wpa_ether_send(struct wpa_supplicant *wpa_s, const u8 *dest,
 			wpa_sm_has_ptk_installed(wpa_s->wpa);
 
 		return wpa_drv_tx_control_port(wpa_s, dest, proto, buf, len,
-					       !encrypt);
+					       !encrypt, -1);
 	}
 
 	if (wpa_s->l2) {
