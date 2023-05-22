@@ -172,6 +172,22 @@ struct wpa_state_machine {
 	void *eapol_status_cb_ctx1;
 	void *eapol_status_cb_ctx2;
 #endif /* CONFIG_TESTING_OPTIONS */
+
+	u8 own_mld_addr[ETH_ALEN];
+	u8 peer_mld_addr[ETH_ALEN];
+	s8 mld_assoc_link_id;
+	u8 n_mld_affiliated_links;
+
+	struct mld_link {
+		bool valid;
+		u8 peer_addr[ETH_ALEN];
+		u8 own_addr[ETH_ALEN];
+
+		const u8 *rsne;
+		const u8 *rsnxe;
+		u8 rsne_len;
+		u8 rsnxe_len;
+	} mld_links[MAX_NUM_MLD_LINKS];
 };
 
 
