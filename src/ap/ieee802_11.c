@@ -4037,55 +4037,60 @@ static int __check_assoc_ies(struct hostapd_data *hapd, struct sta_info *sta,
 		}
 #endif /* CONFIG_IEEE80211R_AP */
 
+		if (!link) {
 #ifdef CONFIG_SAE
-		if (wpa_auth_uses_sae(sta->wpa_sm) && sta->sae &&
-		    sta->sae->state == SAE_ACCEPTED)
-			wpa_auth_add_sae_pmkid(sta->wpa_sm, sta->sae->pmkid);
+			if (wpa_auth_uses_sae(sta->wpa_sm) && sta->sae &&
+			    sta->sae->state == SAE_ACCEPTED)
+				wpa_auth_add_sae_pmkid(sta->wpa_sm,
+						       sta->sae->pmkid);
 
-		if (wpa_auth_uses_sae(sta->wpa_sm) &&
-		    sta->auth_alg == WLAN_AUTH_OPEN) {
-			struct rsn_pmksa_cache_entry *sa;
-			sa = wpa_auth_sta_get_pmksa(sta->wpa_sm);
-			if (!sa || !wpa_key_mgmt_sae(sa->akmp)) {
-				wpa_printf(MSG_DEBUG,
-					   "SAE: No PMKSA cache entry found for "
-					   MACSTR, MAC2STR(sta->addr));
-				return WLAN_STATUS_INVALID_PMKID;
+			if (wpa_auth_uses_sae(sta->wpa_sm) &&
+			    sta->auth_alg == WLAN_AUTH_OPEN) {
+				struct rsn_pmksa_cache_entry *sa;
+				sa = wpa_auth_sta_get_pmksa(sta->wpa_sm);
+				if (!sa || !wpa_key_mgmt_sae(sa->akmp)) {
+					wpa_printf(MSG_DEBUG,
+						   "SAE: No PMKSA cache entry found for "
+						   MACSTR, MAC2STR(sta->addr));
+					return WLAN_STATUS_INVALID_PMKID;
+				}
+				wpa_printf(MSG_DEBUG, "SAE: " MACSTR
+					   " using PMKSA caching", MAC2STR(sta->addr));
+			} else if (wpa_auth_uses_sae(sta->wpa_sm) &&
+				   sta->auth_alg != WLAN_AUTH_SAE &&
+				   !(sta->auth_alg == WLAN_AUTH_FT &&
+				     wpa_auth_uses_ft_sae(sta->wpa_sm))) {
+				wpa_printf(MSG_DEBUG, "SAE: " MACSTR
+					   " tried to use SAE AKM after non-SAE auth_alg %u",
+					   MAC2STR(sta->addr), sta->auth_alg);
+				return WLAN_STATUS_NOT_SUPPORTED_AUTH_ALG;
 			}
-			wpa_printf(MSG_DEBUG, "SAE: " MACSTR
-				   " using PMKSA caching", MAC2STR(sta->addr));
-		} else if (wpa_auth_uses_sae(sta->wpa_sm) &&
-			   sta->auth_alg != WLAN_AUTH_SAE &&
-			   !(sta->auth_alg == WLAN_AUTH_FT &&
-			     wpa_auth_uses_ft_sae(sta->wpa_sm))) {
-			wpa_printf(MSG_DEBUG, "SAE: " MACSTR " tried to use "
-				   "SAE AKM after non-SAE auth_alg %u",
-				   MAC2STR(sta->addr), sta->auth_alg);
-			return WLAN_STATUS_NOT_SUPPORTED_AUTH_ALG;
-		}
 
-		if (hapd->conf->sae_pwe == SAE_PWE_BOTH &&
-		    sta->auth_alg == WLAN_AUTH_SAE &&
-		    sta->sae && !sta->sae->h2e &&
-		    ieee802_11_rsnx_capab_len(elems->rsnxe, elems->rsnxe_len,
-					      WLAN_RSNX_CAPAB_SAE_H2E)) {
-			wpa_printf(MSG_INFO, "SAE: " MACSTR
-				   " indicates support for SAE H2E, but did not use it",
-				   MAC2STR(sta->addr));
-			return WLAN_STATUS_UNSPECIFIED_FAILURE;
-		}
+			if (hapd->conf->sae_pwe == SAE_PWE_BOTH &&
+			    sta->auth_alg == WLAN_AUTH_SAE &&
+			    sta->sae && !sta->sae->h2e &&
+			    ieee802_11_rsnx_capab_len(elems->rsnxe,
+						      elems->rsnxe_len,
+						      WLAN_RSNX_CAPAB_SAE_H2E)) {
+				wpa_printf(MSG_INFO, "SAE: " MACSTR
+					   " indicates support for SAE H2E, but did not use it",
+					   MAC2STR(sta->addr));
+				return WLAN_STATUS_UNSPECIFIED_FAILURE;
+			}
 #endif /* CONFIG_SAE */
 
 #ifdef CONFIG_OWE
-		if ((hapd->conf->wpa_key_mgmt & WPA_KEY_MGMT_OWE) &&
-		    wpa_auth_sta_key_mgmt(sta->wpa_sm) == WPA_KEY_MGMT_OWE &&
-		    elems->owe_dh) {
-			resp = owe_process_assoc_req(hapd, sta, elems->owe_dh,
-						     elems->owe_dh_len);
-			if (resp != WLAN_STATUS_SUCCESS)
-				return resp;
-		}
+			if ((hapd->conf->wpa_key_mgmt & WPA_KEY_MGMT_OWE) &&
+			    wpa_auth_sta_key_mgmt(sta->wpa_sm) ==
+			    WPA_KEY_MGMT_OWE && elems->owe_dh) {
+				resp = owe_process_assoc_req(hapd, sta,
+							     elems->owe_dh,
+							     elems->owe_dh_len);
+				if (resp != WLAN_STATUS_SUCCESS)
+					return resp;
+			}
 #endif /* CONFIG_OWE */
+		}
 
 #ifdef CONFIG_DPP2
 		dpp_pfs_free(sta->dpp_pfs);
