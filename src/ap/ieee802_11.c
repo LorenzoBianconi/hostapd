@@ -5505,27 +5505,38 @@ static void handle_assoc(struct hostapd_data *hapd,
 }
 
 
-static void handle_disassoc(struct hostapd_data *hapd,
-			    const struct ieee80211_mgmt *mgmt, size_t len)
+static void hostapd_deauth_sta(struct hostapd_data *hapd,
+			       struct sta_info *sta,
+			       const struct ieee80211_mgmt *mgmt)
 {
-	struct sta_info *sta;
+	wpa_msg(hapd->msg_ctx, MSG_DEBUG,
+		"deauthentication: STA=" MACSTR " reason_code=%d",
+		MAC2STR(mgmt->sa), le_to_host16(mgmt->u.deauth.reason_code));
 
-	if (len < IEEE80211_HDRLEN + sizeof(mgmt->u.disassoc)) {
-		wpa_printf(MSG_INFO, "handle_disassoc - too short payload (len=%lu)",
-			   (unsigned long) len);
-		return;
-	}
+	ap_sta_set_authorized(hapd, sta, 0);
+	sta->last_seq_ctrl = WLAN_INVALID_MGMT_SEQ;
+	sta->flags &= ~(WLAN_STA_AUTH | WLAN_STA_ASSOC |
+			WLAN_STA_ASSOC_REQ_OK);
+	hostapd_set_sta_flags(hapd, sta);
+	wpa_auth_sm_event(sta->wpa_sm, WPA_DEAUTH);
+	hostapd_logger(hapd, sta->addr, HOSTAPD_MODULE_IEEE80211,
+		       HOSTAPD_LEVEL_DEBUG, "deauthenticated");
+	mlme_deauthenticate_indication(
+		hapd, sta, le_to_host16(mgmt->u.deauth.reason_code));
+	sta->acct_terminate_cause = RADIUS_ACCT_TERMINATE_CAUSE_USER_REQUEST;
+	ieee802_1x_notify_port_enabled(sta->eapol_sm, 0);
+	ap_free_sta(hapd, sta);
+}
 
-	wpa_printf(MSG_DEBUG, "disassocation: STA=" MACSTR " reason_code=%d",
+
+static void hostapd_disassoc_sta(struct hostapd_data *hapd,
+				 struct sta_info *sta,
+				 const struct ieee80211_mgmt *mgmt)
+{
+	wpa_printf(MSG_DEBUG,
+		   "disassocation: STA=" MACSTR " reason_code=%d",
 		   MAC2STR(mgmt->sa),
 		   le_to_host16(mgmt->u.disassoc.reason_code));
-
-	sta = ap_get_sta(hapd, mgmt->sa);
-	if (sta == NULL) {
-		wpa_printf(MSG_INFO, "Station " MACSTR " trying to disassociate, but it is not associated",
-			   MAC2STR(mgmt->sa));
-		return;
-	}
 
 	ap_sta_set_authorized(hapd, sta, 0);
 	sta->last_seq_ctrl = WLAN_INVALID_MGMT_SEQ;
@@ -5570,6 +5581,151 @@ static void handle_disassoc(struct hostapd_data *hapd,
 }
 
 
+#ifdef CONFIG_IEEE80211BE
+
+static struct sta_info *
+hostapd_ml_get_assoc_sta(struct hostapd_data *hapd,
+			 struct sta_info *sta,
+			 struct hostapd_data **assoc_hapd)
+{
+	struct hostapd_data *other_hapd = NULL;
+	struct sta_info *tmp_sta;
+
+	*assoc_hapd = hapd;
+
+	/* The station is the one on which the association was performed */
+	if (sta->mld_assoc_link_id == hapd->mld_link_id)
+		return sta;
+
+
+	other_hapd = hostapd_mld_get_link_bss(hapd, sta->mld_assoc_link_id);
+
+	if (!other_hapd) {
+		wpa_printf(MSG_DEBUG,
+			   "MLD: no link match for link_id=%u",
+			   sta->mld_assoc_link_id);
+		return sta;
+	}
+
+	/*
+	 * Iterate over the stations and find the one with the matching link ID
+	 * and association ID
+	 */
+	for (tmp_sta = other_hapd->sta_list; tmp_sta; tmp_sta = tmp_sta->next) {
+		if (tmp_sta->mld_assoc_link_id == sta->mld_assoc_link_id &&
+		    tmp_sta->aid == sta->aid) {
+			*assoc_hapd = other_hapd;
+			return tmp_sta;
+		}
+	}
+
+	return sta;
+}
+
+#endif /* CONFIG_IEEE80211BE */
+
+
+static bool hostapd_ml_handle_disconnect(struct hostapd_data *hapd,
+					 struct sta_info *sta,
+					 const struct ieee80211_mgmt *mgmt,
+					 bool disassoc)
+{
+#ifdef CONFIG_IEEE80211BE
+	struct hostapd_data *assoc_hapd, *tmp_hapd;
+	struct sta_info *assoc_sta;
+	u8 i, link_id;
+
+	if (!hostapd_is_mld_ap(hapd))
+		return false;
+
+	/*
+	 * Get the station on which the association was performed, as it holds
+	 * the information about all the other links
+	 */
+	assoc_sta = hostapd_ml_get_assoc_sta(hapd, sta, &assoc_hapd);
+
+	for (link_id = 0; link_id < MAX_NUM_MLD_LINKS; link_id++) {
+		for (i = 0; i < assoc_hapd->iface->interfaces->count; i++) {
+			struct sta_info *tmp_sta;
+
+			if (!assoc_sta->mld_info.links[link_id].valid)
+				continue;
+
+			tmp_hapd =
+				assoc_hapd->iface->interfaces->iface[i]->bss[0];
+
+			if (!tmp_hapd->conf->mld_ap ||
+			    assoc_hapd->conf->mld_id != tmp_hapd->conf->mld_id)
+				continue;
+
+			for (tmp_sta = tmp_hapd->sta_list; tmp_sta;
+			     tmp_sta = tmp_sta->next) {
+				/*
+				 * remove the station on which the association
+				 * was done only after all other link station
+				 * are removed. Since there is a only a single
+				 * station per hapd with the same association
+				 * link simply break;
+				 */
+				if (tmp_sta == assoc_sta)
+					break;
+
+				if (tmp_sta->mld_assoc_link_id !=
+				    assoc_sta->mld_assoc_link_id ||
+				    tmp_sta->aid != assoc_sta->aid)
+					continue;
+
+				if (!disassoc)
+					hostapd_deauth_sta(tmp_hapd, tmp_sta,
+							   mgmt);
+				else
+					hostapd_disassoc_sta(tmp_hapd, tmp_sta,
+							     mgmt);
+				break;
+			}
+		}
+	}
+
+	/* remove the station on which the association was performed */
+	if (!disassoc)
+		hostapd_deauth_sta(assoc_hapd, assoc_sta, mgmt);
+	else
+		hostapd_disassoc_sta(assoc_hapd, assoc_sta, mgmt);
+
+	return true;
+#else
+	return false;
+#endif /* CONFIG_IEEE80211BE */
+}
+
+
+static void handle_disassoc(struct hostapd_data *hapd,
+			    const struct ieee80211_mgmt *mgmt, size_t len)
+{
+	struct sta_info *sta;
+
+	if (len < IEEE80211_HDRLEN + sizeof(mgmt->u.disassoc)) {
+		wpa_printf(MSG_INFO,
+			   "handle_disassoc - too short payload (len=%lu)",
+			   (unsigned long) len);
+		return;
+	}
+
+	sta = ap_get_sta(hapd, mgmt->sa);
+	if (!sta) {
+		wpa_printf(MSG_INFO,
+			   "Station " MACSTR " trying to disassociate, but it is not associated",
+			   MAC2STR(mgmt->sa));
+		return;
+	}
+
+	if (hostapd_ml_handle_disconnect(hapd, sta, mgmt, true))
+		return;
+
+	hostapd_disassoc_sta(hapd, sta, mgmt);
+}
+
+
 static void handle_deauth(struct hostapd_data *hapd,
 			  const struct ieee80211_mgmt *mgmt, size_t len)
 {
@@ -5580,10 +5736,6 @@ static void handle_deauth(struct hostapd_data *hapd,
 			"payload (len=%lu)", (unsigned long) len);
 		return;
 	}
-
-	wpa_msg(hapd->msg_ctx, MSG_DEBUG, "deauthentication: STA=" MACSTR
-		" reason_code=%d",
-		MAC2STR(mgmt->sa), le_to_host16(mgmt->u.deauth.reason_code));
 
 	/* Clear the PTKSA cache entries for PASN */
 	ptksa_cache_flush(hapd->ptksa, mgmt->sa, WPA_CIPHER_NONE);
@@ -5596,19 +5748,10 @@ static void handle_deauth(struct hostapd_data *hapd,
 		return;
 	}
 
-	ap_sta_set_authorized(hapd, sta, 0);
-	sta->last_seq_ctrl = WLAN_INVALID_MGMT_SEQ;
-	sta->flags &= ~(WLAN_STA_AUTH | WLAN_STA_ASSOC |
-			WLAN_STA_ASSOC_REQ_OK);
-	hostapd_set_sta_flags(hapd, sta);
-	wpa_auth_sm_event(sta->wpa_sm, WPA_DEAUTH);
-	hostapd_logger(hapd, sta->addr, HOSTAPD_MODULE_IEEE80211,
-		       HOSTAPD_LEVEL_DEBUG, "deauthenticated");
-	mlme_deauthenticate_indication(
-		hapd, sta, le_to_host16(mgmt->u.deauth.reason_code));
-	sta->acct_terminate_cause = RADIUS_ACCT_TERMINATE_CAUSE_USER_REQUEST;
-	ieee802_1x_notify_port_enabled(sta->eapol_sm, 0);
-	ap_free_sta(hapd, sta);
+	if (hostapd_ml_handle_disconnect(hapd, sta, mgmt, false))
+		return;
+
+	hostapd_deauth_sta(hapd, sta, mgmt);
 }
 
 
