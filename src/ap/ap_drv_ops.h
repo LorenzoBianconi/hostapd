@@ -174,12 +174,13 @@ static inline int hostapd_drv_set_countermeasures(struct hostapd_data *hapd,
 
 static inline int hostapd_drv_set_sta_vlan(const char *ifname,
 					   struct hostapd_data *hapd,
-					   const u8 *addr, int vlan_id)
+					   const u8 *addr, int vlan_id,
+					   s8 link_id)
 {
 	if (hapd->driver == NULL || hapd->driver->set_sta_vlan == NULL)
 		return 0;
 	return hapd->driver->set_sta_vlan(hapd->drv_priv, addr, ifname,
-					  vlan_id);
+					  vlan_id, link_id);
 }
 
 static inline int hostapd_drv_get_inact_sec(struct hostapd_data *hapd,
