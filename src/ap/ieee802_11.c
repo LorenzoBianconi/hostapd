@@ -396,8 +396,26 @@ static int send_auth_reply(struct hostapd_data *hapd, struct sta_info *sta,
 	u8 *buf;
 	size_t rlen;
 	int reply_res = WLAN_STATUS_UNSPECIFIED_FAILURE;
+	const u8 *sa = hapd->own_addr;
+	struct wpabuf *ml_resp = NULL;
 
-	rlen = IEEE80211_HDRLEN + sizeof(reply->u.auth) + ies_len;
+#ifdef CONFIG_IEEE80211BE
+	/*
+	 * Once an non-AP MLD station is added to the driver, the addressing
+	 * should use MLD address. Thus, use MLD address an not the
+	 * handle the translations
+	 */
+	if (hapd->conf->mld_ap && sta && sta->mld_info.mld_sta) {
+		sa = hapd->mld_addr;
+
+		ml_resp = hostapd_ml_auth_resp(hapd);
+		if (!ml_resp)
+			return -1;
+	}
+#endif /* CONFIG_IEEE80211BE */
+
+	rlen = IEEE80211_HDRLEN + sizeof(reply->u.auth) + ies_len +
+	       (ml_resp ? wpabuf_len(ml_resp) : 0);
 	buf = os_zalloc(rlen);
 	if (buf == NULL)
 		return -1;
@@ -406,7 +424,7 @@ static int send_auth_reply(struct hostapd_data *hapd, struct sta_info *sta,
 	reply->frame_control = IEEE80211_FC(WLAN_FC_TYPE_MGMT,
 					    WLAN_FC_STYPE_AUTH);
 	os_memcpy(reply->da, dst, ETH_ALEN);
-	os_memcpy(reply->sa, hapd->own_addr, ETH_ALEN);
+	os_memcpy(reply->sa, sa, ETH_ALEN);
 	os_memcpy(reply->bssid, bssid, ETH_ALEN);
 
 	reply->u.auth.auth_alg = host_to_le16(auth_alg);
@@ -415,6 +433,14 @@ static int send_auth_reply(struct hostapd_data *hapd, struct sta_info *sta,
 
 	if (ies && ies_len)
 		os_memcpy(reply->u.auth.variable, ies, ies_len);
+
+#ifdef CONFIG_IEEE80211BE
+	if (ml_resp)
+		os_memcpy(reply->u.auth.variable + ies_len,
+			  wpabuf_head(ml_resp), wpabuf_len(ml_resp));
+
+	wpabuf_free(ml_resp);
+#endif /* CONFIG_IEEE80211BE */
 
 	wpa_printf(MSG_DEBUG, "authentication reply: STA=" MACSTR
 		   " auth_alg=%d auth_transaction=%d resp=%d (IE len=%lu) (dbg=%s)",
@@ -2747,6 +2773,8 @@ static void handle_auth(struct hostapd_data *hapd,
 	size_t resp_ies_len = 0;
 	u16 seq_ctrl;
 	struct radius_sta rad_info;
+	const u8 *dst, *sa, *bssid;
+	bool mld_sta = false;
 
 	if (len < IEEE80211_HDRLEN + sizeof(mgmt->u.auth)) {
 		wpa_printf(MSG_INFO, "handle_auth - too short payload (len=%lu)",
@@ -2764,6 +2792,21 @@ static void handle_auth(struct hostapd_data *hapd,
 	}
 #endif /* CONFIG_TESTING_OPTIONS */
 
+	sa = mgmt->sa;
+#ifdef CONFIG_IEEE80211BE
+		/*
+		 * Handle MLO authentication before the station is added to hapd and the
+		 * driver so that the station MLD address would be used in both hapd and
+		 * the driver.
+		 */
+		sa = hostapd_process_ml_auth(hapd, mgmt, len);
+		if (sa)
+			mld_sta = true;
+		else
+			sa = mgmt->sa;
+#endif /* CONFIG_IEEE80211BE */
+
+
 	auth_alg = le_to_host16(mgmt->u.auth.auth_alg);
 	auth_transaction = le_to_host16(mgmt->u.auth.auth_transaction);
 	status_code = le_to_host16(mgmt->u.auth.status_code);
@@ -2779,7 +2822,7 @@ static void handle_auth(struct hostapd_data *hapd,
 	wpa_printf(MSG_DEBUG, "authentication: STA=" MACSTR " auth_alg=%d "
 		   "auth_transaction=%d status_code=%d wep=%d%s "
 		   "seq_ctrl=0x%x%s%s",
-		   MAC2STR(mgmt->sa), auth_alg, auth_transaction,
+		   MAC2STR(sa), auth_alg, auth_transaction,
 		   status_code, !!(fc & WLAN_FC_ISWEP),
 		   challenge ? " challenge" : "",
 		   seq_ctrl, (fc & WLAN_FC_RETRY) ? " retry" : "",
@@ -2845,7 +2888,16 @@ static void handle_auth(struct hostapd_data *hapd,
 
 	if (os_memcmp(mgmt->sa, hapd->own_addr, ETH_ALEN) == 0) {
 		wpa_printf(MSG_INFO, "Station " MACSTR " not allowed to authenticate",
-			   MAC2STR(mgmt->sa));
+			   MAC2STR(sa));
+		resp = WLAN_STATUS_UNSPECIFIED_FAILURE;
+		goto fail;
+	}
+
+	if (mld_sta &&
+	    (!os_memcmp(sa, hapd->own_addr, ETH_ALEN) ||
+	     !os_memcmp(sa, hapd->mld_addr, ETH_ALEN))) {
+		wpa_printf(MSG_INFO, "Station " MACSTR " not allowed to authenticate",
+			   MAC2STR(sa));
 		resp = WLAN_STATUS_UNSPECIFIED_FAILURE;
 		goto fail;
 	}
@@ -2853,7 +2905,7 @@ static void handle_auth(struct hostapd_data *hapd,
 	if (hapd->conf->no_auth_if_seen_on) {
 		struct hostapd_data *other;
 
-		other = sta_track_seen_on(hapd->iface, mgmt->sa,
+		other = sta_track_seen_on(hapd->iface, sa,
 					  hapd->conf->no_auth_if_seen_on);
 		if (other) {
 			u8 *pos;
@@ -2862,7 +2914,7 @@ static void handle_auth(struct hostapd_data *hapd,
 
 			wpa_printf(MSG_DEBUG, "%s: Reject authentication from "
 				   MACSTR " since STA has been seen on %s",
-				   hapd->conf->iface, MAC2STR(mgmt->sa),
+				   hapd->conf->iface, MAC2STR(sa),
 				   hapd->conf->no_auth_if_seen_on);
 
 			resp = WLAN_STATUS_REJECTED_WITH_SUGGESTED_BSS_TRANSITION;
@@ -2905,12 +2957,12 @@ static void handle_auth(struct hostapd_data *hapd,
 		}
 	}
 
-	res = ieee802_11_allowed_address(hapd, mgmt->sa, (const u8 *) mgmt, len,
+	res = ieee802_11_allowed_address(hapd, sa, (const u8 *) mgmt, len,
 					 &rad_info);
 	if (res == HOSTAPD_ACL_REJECT) {
 		wpa_msg(hapd->msg_ctx, MSG_DEBUG,
 			"Ignore Authentication frame from " MACSTR
-			" due to ACL reject", MAC2STR(mgmt->sa));
+			" due to ACL reject", MAC2STR(sa));
 		resp = WLAN_STATUS_UNSPECIFIED_FAILURE;
 		goto fail;
 	}
@@ -2920,7 +2972,7 @@ static void handle_auth(struct hostapd_data *hapd,
 #ifdef CONFIG_SAE
 	if (auth_alg == WLAN_AUTH_SAE && !from_queue &&
 	    (auth_transaction == 1 ||
-	     (auth_transaction == 2 && auth_sae_queued_addr(hapd, mgmt->sa)))) {
+	     (auth_transaction == 2 && auth_sae_queued_addr(hapd, sa)))) {
 		/* Handle SAE Authentication commit message through a queue to
 		 * provide more control for postponing the needed heavy
 		 * processing under a possible DoS attack scenario. In addition,
@@ -2933,7 +2985,7 @@ static void handle_auth(struct hostapd_data *hapd,
 	}
 #endif /* CONFIG_SAE */
 
-	sta = ap_get_sta(hapd, mgmt->sa);
+	sta = ap_get_sta(hapd, sa);
 	if (sta) {
 		sta->flags &= ~WLAN_STA_PENDING_FILS_ERP;
 		sta->ft_over_ds = 0;
@@ -2953,7 +3005,7 @@ static void handle_auth(struct hostapd_data *hapd,
 		    sta->plink_state == PLINK_BLOCKED) {
 			wpa_printf(MSG_DEBUG, "Mesh peer " MACSTR
 				   " is blocked - drop Authentication frame",
-				   MAC2STR(mgmt->sa));
+				   MAC2STR(sa));
 			return;
 		}
 #endif /* CONFIG_MESH */
@@ -2973,7 +3025,7 @@ static void handle_auth(struct hostapd_data *hapd,
 			 */
 			wpa_printf(MSG_DEBUG, "Mesh peer " MACSTR
 				   " not yet known - drop Authentication frame",
-				   MAC2STR(mgmt->sa));
+				   MAC2STR(sa));
 			/*
 			 * Save a copy of the frame so that it can be processed
 			 * if a new peer entry is added shortly after this.
@@ -2985,13 +3037,38 @@ static void handle_auth(struct hostapd_data *hapd,
 		}
 #endif /* CONFIG_MESH */
 
-		sta = ap_sta_add(hapd, mgmt->sa);
+		sta = ap_sta_add(hapd, sa);
 		if (!sta) {
 			wpa_printf(MSG_DEBUG, "ap_sta_add() failed");
 			resp = WLAN_STATUS_AP_UNABLE_TO_HANDLE_NEW_STA;
 			goto fail;
 		}
 	}
+
+#ifdef CONFIG_IEEE80211BE
+	if (auth_transaction == 1) {
+		os_memset(&sta->mld_info, 0, sizeof(sta->mld_info));
+
+		if (mld_sta) {
+			u8 link_id = hapd->mld_link_id;
+
+			sta->mld_info.mld_sta = true;
+			sta->mld_assoc_link_id = link_id;
+
+			/*
+			 * Set the MLD address as the station address and the
+			 * station addresses.
+			 */
+			os_memcpy(sta->mld_info.common_info.mld_addr, sa,
+				  ETH_ALEN);
+			os_memcpy(sta->mld_info.links[link_id].peer_addr,
+				  mgmt->sa, ETH_ALEN);
+			os_memcpy(sta->mld_info.links[link_id].local_addr,
+				  hapd->own_addr, ETH_ALEN);
+		}
+	}
+#endif /* CONFIG_IEEE80211BE */
+
 	sta->last_seq_ctrl = seq_ctrl;
 	sta->last_subtype = WLAN_FC_STYPE_AUTH;
 #ifdef CONFIG_MBO
@@ -3129,7 +3206,22 @@ static void handle_auth(struct hostapd_data *hapd,
 	}
 
  fail:
-	reply_res = send_auth_reply(hapd, sta, mgmt->sa, mgmt->bssid, auth_alg,
+	 dst = mgmt->sa;
+	 bssid = mgmt->bssid;
+
+#ifdef CONFIG_IEEE80211BE
+	 /*
+	  * Once an non-AP MLD station is added to the driver, the addressing
+	  * should use MLD address. It is the responsibility of the driver to
+	  * handle the translations
+	  */
+	if (hapd->conf->mld_ap && sta && sta->mld_info.mld_sta) {
+		dst = sta->addr;
+		bssid = hapd->mld_addr;
+	}
+#endif /* CONFIG_IEEE80211BE */
+
+	reply_res = send_auth_reply(hapd, sta, dst, bssid, auth_alg,
 				    auth_alg == WLAN_AUTH_SAE ?
 				    auth_transaction : auth_transaction + 1,
 				    resp, resp_ies, resp_ies_len,
