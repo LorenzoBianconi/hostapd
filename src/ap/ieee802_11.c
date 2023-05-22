@@ -6438,6 +6438,11 @@ hostapd_eid_rnr_iface_len(struct hostapd_data *hapd,
 	size_t total_len = 0, len = *current_len;
 	int tbtt_count = 0;
 	size_t i, start = 0;
+	bool mld_ap = false;
+
+#ifdef CONFIG_IEEE80211BE
+	mld_ap = !!hapd->conf->mld_ap;
+#endif /* CONFIG_IEEE80211BE */
 
 	while (start < hapd->iface->num_bss) {
 		if (!len ||
@@ -6467,8 +6472,13 @@ hostapd_eid_rnr_iface_len(struct hostapd_data *hapd,
 			    tbtt_count >= RNR_TBTT_INFO_COUNT_MAX)
 				break;
 
-			len += RNR_TBTT_INFO_LEN;
-			total_len += RNR_TBTT_INFO_LEN;
+			if (!mld_ap) {
+				len += RNR_TBTT_INFO_LEN;
+				total_len += RNR_TBTT_INFO_LEN;
+			} else {
+				len += RNR_TBTT_INFO_MLD_LEN;
+				total_len += RNR_TBTT_INFO_MLD_LEN;
+			}
 			tbtt_count++;
 		}
 		start = i;
@@ -6523,8 +6533,8 @@ static enum colocation_mode get_colocation_mode(struct hostapd_data *hapd)
 }
 
 
-static size_t hostapd_eid_rnr_colocation_len(struct hostapd_data *hapd,
-					     size_t *current_len)
+static size_t hostapd_eid_rnr_multi_iface_len(struct hostapd_data *hapd,
+					      size_t *current_len)
 {
 	struct hostapd_iface *iface;
 	size_t len = 0;
@@ -6535,9 +6545,16 @@ static size_t hostapd_eid_rnr_colocation_len(struct hostapd_data *hapd,
 
 	for (i = 0; i < hapd->iface->interfaces->count; i++) {
 		iface = hapd->iface->interfaces->iface[i];
+		bool mld_ap = false;
+
+#ifdef CONFIG_IEEE80211BE
+		if (hapd->conf->mld_ap && iface->bss[0]->conf->mld_ap &&
+		    hapd->conf->mld_id == iface->bss[0]->conf->mld_id)
+			mld_ap = true;
+#endif /* CONFIG_IEEE80211BE */
 
 		if (iface == hapd->iface ||
-		    !is_6ghz_op_class(iface->conf->op_class))
+		    !(is_6ghz_op_class(iface->conf->op_class) || mld_ap))
 			continue;
 
 		len += hostapd_eid_rnr_iface_len(iface->bss[0], hapd,
@@ -6552,6 +6569,11 @@ size_t hostapd_eid_rnr_len(struct hostapd_data *hapd, u32 type)
 {
 	size_t total_len = 0, current_len = 0;
 	enum colocation_mode mode = get_colocation_mode(hapd);
+	bool mld_ap = false;
+
+#ifdef CONFIG_IEEE80211BE
+	mld_ap = !!hapd->conf->mld_ap;
+#endif /* CONFIG_IEEE80211BE */
 
 	switch (type) {
 	case WLAN_FC_STYPE_BEACON:
@@ -6560,9 +6582,10 @@ size_t hostapd_eid_rnr_len(struct hostapd_data *hapd, u32 type)
 		/* fallthrough */
 
 	case WLAN_FC_STYPE_PROBE_RESP:
-		if (mode == COLOCATED_LOWER_BAND)
-			total_len += hostapd_eid_rnr_colocation_len(
-				hapd, &current_len);
+		if (mode == COLOCATED_LOWER_BAND || mld_ap)
+			total_len +=
+				hostapd_eid_rnr_multi_iface_len(hapd,
+								&current_len);
 
 		if (hapd->conf->rnr && hapd->iface->num_bss > 1 &&
 		    !hapd->iconf->mbssid)
@@ -6652,6 +6675,11 @@ static u8 * hostapd_eid_rnr_iface(struct hostapd_data *hapd,
 	size_t len = *current_len;
 	u8 *tbtt_count_pos, *eid_start = eid, *size_offset = (eid - len) + 1;
 	u8 tbtt_count = 0, op_class, channel, bss_param;
+	bool mld_ap = false;
+
+#ifdef CONFIG_IEEE80211BE
+	mld_ap = !!hapd->conf->mld_ap;
+#endif /* CONFIG_IEEE80211BE */
 
 	if (!(iface->drv_flags & WPA_DRIVER_FLAGS_AP_CSA) || !iface->freq)
 		return eid;
@@ -6674,7 +6702,12 @@ static u8 * hostapd_eid_rnr_iface(struct hostapd_data *hapd,
 		}
 
 		tbtt_count_pos = eid++;
-		*eid++ = RNR_TBTT_INFO_LEN;
+
+		if (!mld_ap)
+			*eid++ = RNR_TBTT_INFO_LEN;
+		else
+			*eid++ = RNR_TBTT_INFO_MLD_LEN;
+
 		*eid++ = op_class;
 		*eid++ = hapd->iconf->channel;
 		len += RNR_TBTT_HEADER_LEN;
@@ -6723,7 +6756,18 @@ static u8 * hostapd_eid_rnr_iface(struct hostapd_data *hapd,
 
 			*eid++ = bss_param;
 			*eid++ = RNR_20_MHZ_PSD_MAX_TXPOWER - 1;
-			len += RNR_TBTT_INFO_LEN;
+
+			if (!mld_ap) {
+				len += RNR_TBTT_INFO_LEN;
+			} else {
+#ifdef CONFIG_IEEE80211BE
+				*eid++ = hapd->conf->mld_id;
+				*eid++ = hapd->mld_link_id | (1 << 4);
+				*eid++ = 0;
+				len += RNR_TBTT_INFO_MLD_LEN;
+#endif /* CONFIG_IEEE80211BE */
+			}
+
 			tbtt_count += 1;
 		}
 
@@ -6740,7 +6784,7 @@ static u8 * hostapd_eid_rnr_iface(struct hostapd_data *hapd,
 }
 
 
-static u8 * hostapd_eid_rnr_colocation(struct hostapd_data *hapd, u8 *eid,
+static u8 *hostapd_eid_rnr_multi_iface(struct hostapd_data *hapd, u8 *eid,
 				       size_t *current_len)
 {
 	struct hostapd_iface *iface;
@@ -6751,9 +6795,16 @@ static u8 * hostapd_eid_rnr_colocation(struct hostapd_data *hapd, u8 *eid,
 
 	for (i = 0; i < hapd->iface->interfaces->count; i++) {
 		iface = hapd->iface->interfaces->iface[i];
+		bool mld_ap = false;
+
+#ifdef CONFIG_IEEE80211BE
+		if (hapd->conf->mld_ap && iface->bss[0]->conf->mld_ap &&
+		    hapd->conf->mld_id == iface->bss[0]->conf->mld_id)
+			mld_ap = true;
+#endif /* CONFIG_IEEE80211BE */
 
 		if (iface == hapd->iface ||
-		    !is_6ghz_op_class(iface->conf->op_class))
+		    !(is_6ghz_op_class(iface->conf->op_class) || mld_ap))
 			continue;
 
 		eid = hostapd_eid_rnr_iface(iface->bss[0], hapd, eid,
@@ -6769,6 +6820,11 @@ u8 * hostapd_eid_rnr(struct hostapd_data *hapd, u8 *eid, u32 type)
 	u8 *eid_start = eid;
 	size_t current_len = 0;
 	enum colocation_mode mode = get_colocation_mode(hapd);
+	bool mld_ap = false;
+
+#ifdef CONFIG_IEEE80211BE
+	mld_ap = !!hapd->conf->mld_ap;
+#endif /* CONFIG_IEEE80211BE */
 
 	switch (type) {
 	case WLAN_FC_STYPE_BEACON:
@@ -6777,9 +6833,9 @@ u8 * hostapd_eid_rnr(struct hostapd_data *hapd, u8 *eid, u32 type)
 		/* fallthrough */
 
 	case WLAN_FC_STYPE_PROBE_RESP:
-		if (mode == COLOCATED_LOWER_BAND)
-			eid = hostapd_eid_rnr_colocation(hapd, eid,
-							 &current_len);
+		if (mode == COLOCATED_LOWER_BAND || mld_ap)
+			eid = hostapd_eid_rnr_multi_iface(hapd, eid,
+							  &current_len);
 
 		if (hapd->conf->rnr && hapd->iface->num_bss > 1 &&
 		    !hapd->iconf->mbssid)
@@ -7094,8 +7150,8 @@ u8 * hostapd_eid_mbssid(struct hostapd_data *hapd, u8 *eid, u8 *end,
 		if (hapd->conf->rnr)
 			rnr_eid = hostapd_eid_nr_db(hapd, rnr_eid, &cur_len);
 		if (get_colocation_mode(hapd) == COLOCATED_LOWER_BAND)
-			rnr_eid = hostapd_eid_rnr_colocation(hapd, rnr_eid,
-							     &cur_len);
+			rnr_eid = hostapd_eid_rnr_multi_iface(hapd, rnr_eid,
+							      &cur_len);
 	}
 
 	return eid;
