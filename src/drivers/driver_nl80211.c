@@ -7952,7 +7952,8 @@ static int i802_read_sta_data(struct i802_bss *bss,
 
 
 static int i802_set_tx_queue_params(void *priv, int queue, int aifs,
-				    int cw_min, int cw_max, int burst_time)
+				    int cw_min, int cw_max, int burst_time,
+				    int link_id)
 {
 	struct i802_bss *bss = priv;
 	struct wpa_driver_nl80211_data *drv = bss->drv;
@@ -8003,6 +8004,10 @@ static int i802_set_tx_queue_params(void *priv, int queue, int aifs,
 	nla_nest_end(msg, params);
 
 	nla_nest_end(msg, txq);
+
+	if (link_id >= 0 &&
+	    nla_put_u8(msg, NL80211_ATTR_MLO_LINK_ID, link_id))
+		goto fail;
 
 	res = send_and_recv_msgs(drv, msg, NULL, NULL, NULL, NULL);
 	wpa_printf(MSG_DEBUG,
