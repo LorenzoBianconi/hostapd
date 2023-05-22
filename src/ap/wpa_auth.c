@@ -35,6 +35,21 @@
 #include "wpa_auth_ie.h"
 #include "sta_info.h"
 
+
+static const u8 *wpa_auth_get_aa(struct wpa_state_machine *sm)
+{
+	return (sm && sm->mld_assoc_link_id >= 0) ?
+		sm->own_mld_addr : sm->wpa_auth->addr;
+}
+
+
+static const u8 *wpa_auth_get_spa(struct wpa_state_machine *sm)
+{
+	return sm->mld_assoc_link_id >= 0 ?
+		sm->peer_mld_addr : sm->addr;
+}
+
+
 #define STATE_MACHINE_DATA struct wpa_state_machine
 #define STATE_MACHINE_DEBUG_PREFIX "WPA"
 #define STATE_MACHINE_ADDR wpa_auth_get_spa(sm)
