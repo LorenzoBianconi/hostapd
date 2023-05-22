@@ -4139,6 +4139,22 @@ static void nl80211_link_set_freq(struct i802_bss *bss, s8 link_id, int freq)
 }
 
 
+static int nl80211_get_link_freq(struct i802_bss *bss, u8 *addr)
+{
+	size_t i;
+
+	for (i = 0; i < bss->n_links; i++) {
+		if (os_memcmp(bss->links[i].addr, addr, ETH_ALEN) == 0) {
+			wpa_printf(MSG_DEBUG, "nl80211: Use link freq=%d",
+				   bss->links[i].freq);
+			return bss->links[i].freq;
+		}
+	}
+
+	return bss->flink->freq;
+}
+
+
 static int wpa_driver_nl80211_send_mlme(struct i802_bss *bss, const u8 *data,
 					size_t data_len, int noack,
 					unsigned int freq, int no_cck,
@@ -4183,13 +4199,14 @@ static int wpa_driver_nl80211_send_mlme(struct i802_bss *bss, const u8 *data,
 	}
 
 	if (drv->device_ap_sme && is_ap_interface(drv->nlmode)) {
-		if (freq == 0) {
-			wpa_printf(MSG_DEBUG, "nl80211: Use bss->freq=%d",
-				   bss->flink->freq);
-			freq = bss->flink->freq;
-		}
-		if ((int) freq == bss->flink->freq)
+		unsigned int link_freq = nl80211_get_link_freq(bss, mgmt->sa);
+
+		if (!freq)
+			freq = link_freq;
+
+		if (freq == link_freq)
 			wait_time = 0;
+
 		goto send_frame_cmd;
 	}
 
