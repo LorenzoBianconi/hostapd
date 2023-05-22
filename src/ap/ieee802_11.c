@@ -3252,6 +3252,43 @@ static u8 hostapd_max_bssid_indicator(struct hostapd_data *hapd)
 }
 
 
+static u32 hostapd_get_aid_word(struct hostapd_data *hapd,
+				struct sta_info *sta, int i)
+{
+#ifdef CONFIG_IEEE80211BE
+	u32 aid_word = 0;
+
+	/* For MLD case, don't use AID's from other links */
+	if (hapd->conf->mld_ap) {
+		int j;
+
+		for (j = 0; j < MAX_NUM_MLD_LINKS; j++) {
+			struct hostapd_data *link_bss;
+
+			if (!sta->mld_info.links[j].valid)
+				continue;
+
+			link_bss = hostapd_mld_get_link_bss(hapd, j);
+			if (!link_bss) {
+				/* This shouldn't happen, just skip */
+				wpa_printf(MSG_ERROR,
+					   "Failed to get link BSS for AID");
+				continue;
+			}
+
+			aid_word |= link_bss->sta_aid[i];
+		}
+
+		return aid_word;
+	} else {
+		return hapd->sta_aid[i];
+	}
+#else
+	return hapd->sta_aid[i];
+#endif
+}
+
+
 int hostapd_get_aid(struct hostapd_data *hapd, struct sta_info *sta)
 {
 	int i, j = 32, aid;
@@ -3266,10 +3303,12 @@ int hostapd_get_aid(struct hostapd_data *hapd, struct sta_info *sta)
 		return -1;
 
 	for (i = 0; i < AID_WORDS; i++) {
-		if (hapd->sta_aid[i] == (u32) -1)
+		u32 aid_word = hostapd_get_aid_word(hapd, sta, i);
+
+		if (aid_word == (u32) -1)
 			continue;
 		for (j = 0; j < 32; j++) {
-			if (!(hapd->sta_aid[i] & BIT(j)))
+			if (!(aid_word & BIT(j)))
 				break;
 		}
 		if (j < 32)
