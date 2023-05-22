@@ -934,6 +934,14 @@ struct hostapd_bss_config {
 	u8 rnr;
 	char *config_id;
 	bool xrates_supported;
+
+#ifdef CONFIG_IEEE80211BE
+	/* The AP is part of an MLD AP */
+	u8 mld_ap;
+
+	/* The MLD ID to which the MLD AP is affiliated with */
+	u8 mld_id;
+#endif /* CONFIG_IEEE80211BE */
 };
 
 /**
