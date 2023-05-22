@@ -1554,10 +1554,19 @@ static int hostapd_mgmt_rx(struct hostapd_data *hapd, struct rx_mgmt *rx_mgmt)
 
 
 static void hostapd_mgmt_tx_cb(struct hostapd_data *hapd, const u8 *buf,
-			       size_t len, u16 stype, int ok)
+			       size_t len, u16 stype, int ok, int link_id)
 {
 	struct ieee80211_hdr *hdr;
-	struct hostapd_data *orig_hapd = hapd, *tmp_hapd;
+	struct hostapd_data *orig_hapd, *tmp_hapd;
+
+#ifdef CONFIG_IEEE80211BE
+	if (hapd->conf->mld_ap && link_id != -1) {
+		tmp_hapd = hostapd_mld_get_link_bss(hapd, link_id);
+		if (tmp_hapd)
+			hapd = tmp_hapd;
+	}
+#endif /* CONFIG_IEEE80211BE */
+	orig_hapd = hapd;
 
 	hdr = (struct ieee80211_hdr *) buf;
 	tmp_hapd = get_hapd_bssid(hapd->iface, get_hdr_bssid(hdr, len));
@@ -1617,28 +1626,59 @@ static int hostapd_event_new_sta(struct hostapd_data *hapd, const u8 *addr)
 }
 
 
+static struct hostapd_data *hostapd_find_by_sta(struct hostapd_iface *iface,
+						const u8 *src)
+{
+	struct sta_info *sta;
+	size_t j;
+	for (j = 0; j < iface->num_bss; j++) {
+		sta = ap_get_sta(iface->bss[j], src);
+		if (sta && sta->flags & WLAN_STA_ASSOC)
+			return iface->bss[j];
+	}
+
+	return NULL;
+}
+
+
 static void hostapd_event_eapol_rx(struct hostapd_data *hapd, const u8 *src,
 				   const u8 *data, size_t data_len,
 				   enum frame_encryption encrypted,
 				   int link_id)
 {
-	struct hostapd_iface *iface;
-	struct sta_info *sta;
-	size_t j;
-
 #ifdef CONFIG_IEEE80211BE
-	hapd = switch_link_hapd(hapd, link_id);
-#endif /* CONFIG_IEEE80211BE */
+	if (link_id != -1) {
+		struct hostapd_data *h_hapd;
 
-	iface = hapd->iface;
+		hapd = switch_link_hapd(hapd, link_id);
+		h_hapd = hostapd_find_by_sta(hapd->iface, src);
+		if (h_hapd)
+			hapd = h_hapd;
+	} else if (hapd->conf->mld_ap) {
+		int i;
 
-	for (j = 0; j < iface->num_bss; j++) {
-		sta = ap_get_sta(iface->bss[j], src);
-		if (sta && sta->flags & WLAN_STA_ASSOC) {
-			hapd = iface->bss[j];
-			break;
+		/* Search for STA on other MLO BSS's */
+		for (i = 0; i < hapd->iface->interfaces->count; i++) {
+			struct hostapd_iface *h =
+				hapd->iface->interfaces->iface[i];
+			struct hostapd_data *h_hapd = h->bss[0];
+			struct hostapd_bss_config *hconf = h_hapd->conf;
+
+			if (!hconf->mld_ap || hconf->mld_id != hapd->conf->mld_id)
+				continue;
+
+			h_hapd = hostapd_find_by_sta(h, src);
+			if (h_hapd) {
+				hapd = h_hapd;
+				break;
+			}
 		}
+	} else {
+		hapd = hostapd_find_by_sta(hapd->iface, src);
 	}
+#else /* CONFIG_IEEE80211BE */
+	hapd = hostapd_find_by_sta(hapd->iface, src);
+#endif /* CONFIG_IEEE80211BE */
 
 	ieee802_1x_receive(hapd, src, data, data_len, encrypted);
 }
@@ -1981,7 +2021,8 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
 			hostapd_mgmt_tx_cb(hapd, data->tx_status.data,
 					   data->tx_status.data_len,
 					   data->tx_status.stype,
-					   data->tx_status.ack);
+					   data->tx_status.ack,
+					   data->tx_status.link_id);
 			break;
 		case WLAN_FC_TYPE_DATA:
 			hostapd_tx_status(hapd, data->tx_status.dst,
@@ -1992,7 +2033,9 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
 		}
 		break;
 	case EVENT_EAPOL_TX_STATUS:
-		hostapd_eapol_tx_status(hapd, data->eapol_tx_status.dst,
+		hostapd_eapol_tx_status(switch_link_hapd(hapd,
+						data->eapol_tx_status.link_id),
+					data->eapol_tx_status.dst,
 					data->eapol_tx_status.data,
 					data->eapol_tx_status.data_len,
 					data->eapol_tx_status.ack);
