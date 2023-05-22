@@ -237,4 +237,5 @@ u8 * hostapd_eid_mbssid(struct hostapd_data *hapd, u8 *eid, u8 *end,
 void punct_update_legacy_bw(u16 bitmap, u8 pri_chan,
 			    enum oper_chan_width *width, u8 *seg0, u8 *seg1);
 
+bool hostapd_is_mld_ap(struct hostapd_data *hapd);
 #endif /* IEEE802_11_H */
