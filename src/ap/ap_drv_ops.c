@@ -935,6 +935,19 @@ void hostapd_get_ext_capa(struct hostapd_iface *iface)
 }
 
 
+void hostapd_get_mld_capa(struct hostapd_iface *iface)
+{
+	struct hostapd_data *hapd = iface->bss[0];
+
+	if (!hapd->driver || !hapd->driver->get_mld_capab)
+		return;
+
+	hapd->driver->get_mld_capab(hapd->drv_priv, WPA_IF_AP_BSS,
+				    &iface->mld_eml_capa,
+				    &iface->mld_mld_capa);
+}
+
+
 int hostapd_drv_do_acs(struct hostapd_data *hapd)
 {
 	struct drv_acs_params params;
