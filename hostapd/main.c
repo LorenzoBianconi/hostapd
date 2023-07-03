@@ -31,7 +31,7 @@
 #include "config_file.h"
 #include "eap_register.h"
 #include "ctrl_iface.h"
-
+#include "build_features.h"
 
 struct hapd_global {
 	void **drv_priv;
@@ -786,7 +786,7 @@ int main(int argc, char *argv[])
 	wpa_supplicant_event = hostapd_wpa_event;
 	wpa_supplicant_event_global = hostapd_wpa_event_global;
 	for (;;) {
-		c = getopt(argc, argv, "b:Bde:f:hi:KP:sSTtu:vg:G:q");
+		c = getopt(argc, argv, "b:Bde:f:hi:KP:sSTtu:g:G:qv::");
 		if (c < 0)
 			break;
 		switch (c) {
@@ -823,6 +823,8 @@ int main(int argc, char *argv[])
 			break;
 #endif /* CONFIG_DEBUG_LINUX_TRACING */
 		case 'v':
+			if (optarg)
+				exit(!has_feature(optarg));
 			show_version();
 			exit(1);
 		case 'g':
