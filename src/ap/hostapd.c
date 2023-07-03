@@ -272,6 +272,30 @@ static int hostapd_iface_conf_changed(struct hostapd_config *newconf,
 }
 
 
+static inline int hostapd_iface_num_sta(struct hostapd_iface *iface)
+{
+	int num_sta = 0;
+	int i;
+
+	for (i = 0; i < iface->num_bss; i++)
+		num_sta += iface->bss[i]->num_sta;
+
+	return num_sta;
+}
+
+
+int hostapd_check_max_sta(struct hostapd_data *hapd)
+{
+	if (hapd->num_sta >= hapd->conf->max_num_sta)
+		return 1;
+
+	if (hapd->iconf->max_num_sta &&
+	    hostapd_iface_num_sta(hapd->iface) >= hapd->iconf->max_num_sta)
+		return 1;
+
+	return 0;
+}
+
 int hostapd_reload_config(struct hostapd_iface *iface, int reconf)
 {
 	struct hapd_interfaces *interfaces = iface->interfaces;

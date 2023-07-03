@@ -2848,6 +2848,14 @@ static int hostapd_config_fill(struct hostapd_config *conf,
 				   line, bss->max_num_sta, MAX_STA_COUNT);
 			return 1;
 		}
+	} else if (os_strcmp(buf, "iface_max_num_sta") == 0) {
+		conf->max_num_sta = atoi(pos);
+		if (conf->max_num_sta < 0 ||
+		    conf->max_num_sta > MAX_STA_COUNT) {
+			wpa_printf(MSG_ERROR, "Line %d: Invalid max_num_sta=%d; allowed range 0..%d",
+				   line, conf->max_num_sta, MAX_STA_COUNT);
+			return 1;
+		}
 	} else if (os_strcmp(buf, "wpa") == 0) {
 		bss->wpa = atoi(pos);
 	} else if (os_strcmp(buf, "extended_key_id") == 0) {

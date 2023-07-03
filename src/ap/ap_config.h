@@ -1037,6 +1037,8 @@ struct hostapd_config {
 	unsigned int track_sta_max_num;
 	unsigned int track_sta_max_age;
 
+	int max_num_sta;
+
 	char country[3]; /* first two octets: country code as described in
 			  * ISO/IEC 3166-1. Third octet:
 			  * ' ' (ascii 32): all environments
