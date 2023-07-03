@@ -1827,6 +1827,7 @@ struct wpa_driver_mesh_join_params {
 #define WPA_DRIVER_MESH_FLAG_AMPE	0x00000008
 	unsigned int flags;
 	bool handle_dfs;
+	int mcast_rate;
 };
 
 struct wpa_driver_set_key_params {
