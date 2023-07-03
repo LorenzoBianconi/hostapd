@@ -2320,6 +2320,8 @@ static int hostapd_config_fill(struct hostapd_config *conf,
 			os_strlcpy(bss->wds_bridge, pos, sizeof(bss->wds_bridge));
 	} else if (os_strcmp(buf, "bridge_hairpin") == 0) {
 		bss->bridge_hairpin = atoi(pos);
+	} else if (os_strcmp(buf, "snoop_iface") == 0) {
+		os_strlcpy(bss->snoop_iface, pos, sizeof(bss->snoop_iface));
 	} else if (os_strcmp(buf, "vlan_bridge") == 0) {
 		os_strlcpy(bss->vlan_bridge, pos, sizeof(bss->vlan_bridge));
 	} else if (os_strcmp(buf, "wds_bridge") == 0) {

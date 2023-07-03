@@ -284,6 +284,7 @@ struct hostapd_bss_config {
 	char iface[IFNAMSIZ + 1];
 	char bridge[IFNAMSIZ + 1];
 	char ft_iface[IFNAMSIZ + 1];
+	char snoop_iface[IFNAMSIZ + 1];
 	char vlan_bridge[IFNAMSIZ + 1];
 	char wds_bridge[IFNAMSIZ + 1];
 	int bridge_hairpin; /* hairpin_mode on bridge members */
