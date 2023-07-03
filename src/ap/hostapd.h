@@ -163,6 +163,21 @@ struct hostapd_sae_commit_queue {
 };
 
 /**
+ * struct hostapd_openwrt_stats - OpenWrt custom STA/AP statistics
+ */
+struct hostapd_openwrt_stats {
+	struct {
+		u64 neighbor_report_tx;
+	} rrm;
+
+	struct {
+		u64 bss_transition_query_rx;
+		u64 bss_transition_request_tx;
+		u64 bss_transition_response_rx;
+	} wnm;
+};
+
+/**
  * struct hostapd_data - hostapd per-BSS data structure
  */
 struct hostapd_data {
@@ -181,6 +196,9 @@ struct hostapd_data {
 	u8 mld_next_link_id;
 
 	struct hostapd_data *mld_first_bss;
+
+	/* OpenWrt specific statistics */
+	struct hostapd_openwrt_stats openwrt_stats;
 
 	int num_sta; /* number of entries in sta_list */
 	struct sta_info *sta_list; /* STA info list head */
