@@ -5322,6 +5322,9 @@ static int wpa_driver_nl80211_set_ap(void *priv,
 	if (ret) {
 		wpa_printf(MSG_DEBUG, "nl80211: Beacon set failed: %d (%s)",
 			   ret, strerror(-ret));
+		if (!link->beacon_set)
+			ret = 0;
+		link->beacon_set = 0;
 	} else {
 		link->beacon_set = 1;
 		nl80211_set_bss(bss, params->cts_protect, params->preamble,

@@ -998,6 +998,7 @@ struct eht_phy_capabilities_info {
 struct hostapd_config {
 	struct hostapd_bss_config **bss, *last_bss;
 	size_t num_bss;
+	char *config_id;
 
 	u16 beacon_int;
 	int rts_threshold;
