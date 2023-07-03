@@ -348,8 +348,6 @@ int hostapd_set_wds_sta(struct hostapd_data *hapd, char *ifname_wds,
 		return -1;
 	if (hapd->conf->wds_bridge[0])
 		bridge = hapd->conf->wds_bridge;
-	else if (hapd->conf->bridge[0])
-		bridge = hapd->conf->bridge;
 	return hapd->driver->set_wds_sta(hapd->drv_priv, addr, aid, val,
 					 bridge, ifname_wds);
 }
