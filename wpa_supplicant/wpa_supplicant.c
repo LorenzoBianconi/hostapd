@@ -3094,6 +3094,10 @@ void ibss_mesh_setup_freq(struct wpa_supplicant *wpa_s,
 
 	freq->freq = ssid->frequency;
 
+	if (ssid->fixed_freq) {
+		obss_scan = 0;
+	}
+
 	if (ssid->mode == WPAS_MODE_IBSS && !ssid->fixed_freq) {
 		struct wpa_bss *bss = ibss_find_existing_bss(wpa_s, ssid);
 
