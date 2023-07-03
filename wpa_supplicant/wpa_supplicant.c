@@ -2710,7 +2710,7 @@ static bool ibss_mesh_can_use_vht(struct wpa_supplicant *wpa_s,
 				  const struct wpa_ssid *ssid,
 				  struct hostapd_hw_modes *mode)
 {
-	if (mode->mode != HOSTAPD_MODE_IEEE80211A)
+	if (mode->mode != HOSTAPD_MODE_IEEE80211A && !(ssid->noscan))
 		return false;
 
 	if (!drv_supports_vht(wpa_s, ssid))
@@ -2783,7 +2783,7 @@ static void ibss_mesh_select_40mhz(struct wpa_supplicant *wpa_s,
 	int i, res;
 	unsigned int j;
 	static const int ht40plus[] = {
-		36, 44, 52, 60, 100, 108, 116, 124, 132, 149, 157, 165, 173,
+		1, 2, 3, 4, 5, 6, 36, 44, 52, 60, 100, 108, 116, 124, 132, 149, 157, 165, 173,
 		184, 192
 	};
 	int ht40 = -1;
@@ -3033,7 +3033,7 @@ void ibss_mesh_setup_freq(struct wpa_supplicant *wpa_s,
 	int ieee80211_mode = wpas_mode_to_ieee80211_mode(ssid->mode);
 	enum hostapd_hw_mode hw_mode;
 	struct hostapd_hw_modes *mode = NULL;
-	int i, obss_scan = 1;
+	int i, obss_scan = !(ssid->noscan);
 	u8 channel;
 	bool is_6ghz;
 	bool dfs_enabled = wpa_s->conf->country[0] && (wpa_s->drv_flags & WPA_DRIVER_FLAGS_RADAR);
