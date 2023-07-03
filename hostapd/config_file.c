@@ -3353,6 +3353,8 @@ static int hostapd_config_fill(struct hostapd_config *conf,
 #ifndef CONFIG_NO_VLAN
 	} else if (os_strcmp(buf, "dynamic_vlan") == 0) {
 		bss->ssid.dynamic_vlan = atoi(pos);
+	} else if (os_strcmp(buf, "vlan_no_bridge") == 0) {
+		bss->ssid.vlan_no_bridge = atoi(pos);
 	} else if (os_strcmp(buf, "per_sta_vif") == 0) {
 		bss->ssid.per_sta_vif = atoi(pos);
 	} else if (os_strcmp(buf, "vlan_file") == 0) {
