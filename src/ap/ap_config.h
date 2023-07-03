@@ -310,6 +310,7 @@ struct hostapd_bss_config {
 	unsigned int eap_sim_db_timeout;
 	int eap_server_erp; /* Whether ERP is enabled on internal EAP server */
 	struct hostapd_ip_addr own_ip_addr;
+	int dynamic_own_ip_addr;
 	char *nas_identifier;
 	struct hostapd_radius_servers *radius;
 	int acct_interim_interval;

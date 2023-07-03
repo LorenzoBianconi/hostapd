@@ -2688,6 +2688,8 @@ static int hostapd_config_fill(struct hostapd_config *conf,
 	} else if (os_strcmp(buf, "iapp_interface") == 0) {
 		wpa_printf(MSG_INFO, "DEPRECATED: iapp_interface not used");
 #endif /* CONFIG_IAPP */
+	} else if (os_strcmp(buf, "dynamic_own_ip_addr") == 0) {
+		bss->dynamic_own_ip_addr = atoi(pos);
 	} else if (os_strcmp(buf, "own_ip_addr") == 0) {
 		if (hostapd_parse_ip_addr(pos, &bss->own_ip_addr)) {
 			wpa_printf(MSG_ERROR,

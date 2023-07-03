@@ -598,6 +598,10 @@ int add_common_radius_attr(struct hostapd_data *hapd,
 	struct hostapd_radius_attr *attr;
 	int len;
 
+	if (hapd->conf->dynamic_own_ip_addr)
+		radius_client_get_local_addr(hapd->radius,
+					     &hapd->conf->own_ip_addr);
+
 	if (!hostapd_config_get_radius_attr(req_attr,
 					    RADIUS_ATTR_NAS_IP_ADDRESS) &&
 	    hapd->conf->own_ip_addr.af == AF_INET &&
