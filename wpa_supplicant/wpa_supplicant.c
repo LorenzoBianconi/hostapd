@@ -7635,6 +7635,8 @@ struct wpa_supplicant * wpa_supplicant_add_iface(struct wpa_global *global,
 	}
 #endif /* CONFIG_P2P */
 
+	wpas_ubus_add_bss(wpa_s);
+
 	return wpa_s;
 }
 
@@ -7660,6 +7662,8 @@ int wpa_supplicant_remove_iface(struct wpa_global *global,
 	char *ifname = NULL;
 	struct wpa_supplicant *parent = wpa_s->parent;
 #endif /* CONFIG_MESH */
+
+	wpas_ubus_free_bss(wpa_s);
 
 	/* Remove interface from the global list of interfaces */
 	prev = global->ifaces;
@@ -8007,7 +8011,11 @@ int wpa_supplicant_run(struct wpa_global *global)
 	eloop_register_signal_terminate(wpa_supplicant_terminate, global);
 	eloop_register_signal_reconfig(wpa_supplicant_reconfig, global);
 
+	wpas_ubus_add(global);
+
 	eloop_run();
+
+	wpas_ubus_free(global);
 
 	return 0;
 }

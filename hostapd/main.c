@@ -991,6 +991,7 @@ int main(int argc, char *argv[])
 	}
 
 	hostapd_global_ctrl_iface_init(&interfaces);
+	hostapd_ubus_add(&interfaces);
 
 	if (hostapd_global_run(&interfaces, daemonize, pid_file)) {
 		wpa_printf(MSG_ERROR, "Failed to start eloop");
@@ -1000,6 +1001,7 @@ int main(int argc, char *argv[])
 	ret = 0;
 
  out:
+	hostapd_ubus_free(&interfaces);
 	hostapd_global_ctrl_iface_deinit(&interfaces);
 	/* Deinitialize all interfaces */
 	for (i = 0; i < interfaces.count; i++) {
