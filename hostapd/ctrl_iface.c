@@ -2753,6 +2753,12 @@ static int hostapd_ctrl_iface_chan_switch(struct hostapd_iface *iface,
 		return 0;
 	}
 
+	if (os_strstr(pos, " auto-ht")) {
+		settings.freq_params.ht_enabled = iface->conf->ieee80211n;
+		settings.freq_params.vht_enabled = iface->conf->ieee80211ac;
+		settings.freq_params.he_enabled = iface->conf->ieee80211ax;
+	}
+
 	for (i = 0; i < iface->num_bss; i++) {
 
 		/* Save CHAN_SWITCH VHT, HE, and EHT config */

@@ -126,6 +126,8 @@ OBJS_c += ../src/utils/common.o
 OBJS_c += ../src/common/cli.o
 OBJS += wmm_ac.o
 
+OBJS += ../src/common/wpa_ctrl.o
+
 ifndef CONFIG_OS
 ifdef CONFIG_NATIVE_WINDOWS
 CONFIG_OS=win32
