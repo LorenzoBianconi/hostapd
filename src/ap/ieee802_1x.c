@@ -2834,6 +2834,7 @@ static const char * bool_txt(bool val)
 	return val ? "TRUE" : "FALSE";
 }
 
+#ifdef CONFIG_CTRL_IFACE_MIB
 
 int ieee802_1x_get_mib(struct hostapd_data *hapd, char *buf, size_t buflen)
 {
@@ -3020,6 +3021,7 @@ int ieee802_1x_get_mib_sta(struct hostapd_data *hapd, struct sta_info *sta,
 	return len;
 }
 
+#endif
 
 #ifdef CONFIG_HS20
 static void ieee802_1x_wnm_notif_send(void *eloop_ctx, void *timeout_ctx)
