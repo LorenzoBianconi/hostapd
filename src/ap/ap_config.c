@@ -1033,6 +1033,22 @@ void hostapd_config_free(struct hostapd_config *conf)
 #endif /* CONFIG_ACS */
 	wpabuf_free(conf->lci);
 	wpabuf_free(conf->civic);
+#ifdef CONFIG_AFC
+	os_free(conf->afc.socket);
+	os_free(conf->afc.request.version);
+	os_free(conf->afc.request.id);
+	os_free(conf->afc.request.sn);
+	for (i = 0; i < conf->afc.n_cert_ids; i++) {
+		os_free(conf->afc.cert_ids[i].rulset);
+		os_free(conf->afc.cert_ids[i].id);
+	}
+	os_free(conf->afc.cert_ids);
+	os_free(conf->afc.location.height_type);
+	os_free(conf->afc.location.linear_polygon_data);
+	os_free(conf->afc.location.radial_polygon_data);
+	os_free(conf->afc.freq_range);
+	os_free(conf->afc.op_class);
+#endif /* CONFIG_AFC */
 
 	os_free(conf);
 }
