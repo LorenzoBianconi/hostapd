@@ -2417,6 +2417,16 @@ static int hostapd_setup_interface_complete_sync(struct hostapd_iface *iface,
 		}
 #endif /* CONFIG_MESH */
 
+#ifdef CONFIG_AFC
+		/* check AFC for 6GHz channels. */
+		res = hostapd_afc_handle_request(iface);
+		if (res <= 0) {
+			if (res < 0)
+				goto fail;
+			return res;
+		}
+#endif /* CONFIG_AFC */
+
 		if (!delay_apply_cfg &&
 		    hostapd_set_freq(hapd, hapd->iconf->hw_mode, iface->freq,
 				     hapd->iconf->channel,
@@ -2848,6 +2858,10 @@ void hostapd_interface_free(struct hostapd_iface *iface)
 			   __func__, iface->bss[j]);
 		os_free(iface->bss[j]);
 	}
+#ifdef CONFIG_AFC
+	os_free(iface->afc.chan_info_list);
+	os_free(iface->afc.freq_range);
+#endif
 	hostapd_cleanup_iface(iface);
 }
 
@@ -4441,4 +4455,50 @@ u16 hostapd_get_punct_bitmap(struct hostapd_data *hapd)
 #endif /* CONFIG_IEEE80211BE */
 
 	return punct_bitmap;
+}
+
+
+void hostap_afc_disable_channels(struct hostapd_iface *iface)
+{
+#ifdef CONFIG_AFC
+	struct hostapd_hw_modes *mode;
+	int i;
+
+	if (iface->num_hw_features < HOSTAPD_MODE_IEEE80211A)
+		return;
+
+	if (!he_reg_is_sp(iface->conf->he_6ghz_reg_pwr_type))
+		return;
+
+	if (!iface->afc.data_valid)
+		return;
+
+	mode = &iface->hw_features[HOSTAPD_MODE_IEEE80211A];
+	for (i = 0; i < mode->num_channels; i++) {
+		struct hostapd_channel_data *chan = &mode->channels[i];
+		int j;
+
+		if (!is_6ghz_freq(chan->freq))
+			continue;
+
+		for (j = 0; j < iface->afc.num_freq_range; j++) {
+			if (chan->freq >= iface->afc.freq_range[j].low_freq &&
+			    chan->freq <= iface->afc.freq_range[j].high_freq)
+				break;
+		}
+
+		if (j != iface->afc.num_freq_range)
+			continue;
+
+		for (j = 0; j < iface->afc.num_chan_info; j++) {
+			if (chan->chan == iface->afc.chan_info_list[j].chan)
+				break;
+		}
+
+		if (j != iface->afc.num_chan_info)
+			continue;
+
+		chan->flag |= HOSTAPD_CHAN_DISABLED;
+	}
+#endif /* CONFIG_AFC */
 }
