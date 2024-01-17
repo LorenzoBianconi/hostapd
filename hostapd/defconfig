@@ -419,3 +419,6 @@ CONFIG_DPP2=y
 # DPP version 3 support (experimental and still changing; do not enable for
 # production use)
 #CONFIG_DPP3=y
+
+# Enable Automated Frequency Coordination for 6GHz outdoor
+#CONFIG_AFC=y

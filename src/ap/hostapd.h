@@ -670,9 +670,15 @@ struct hostapd_iface {
 
 	/* Configured freq of interface is NO_IR */
 	bool is_no_ir;
+
+#ifdef CONFIG_AFC
+	bool afc_completed;
+#endif /* CONFIG_AFC */
 };
 
 /* hostapd.c */
+int hostapd_afc_handle_request(struct hostapd_iface *iface);
+
 int hostapd_for_each_interface(struct hapd_interfaces *interfaces,
 			       int (*cb)(struct hostapd_iface *iface,
 					 void *ctx), void *ctx);

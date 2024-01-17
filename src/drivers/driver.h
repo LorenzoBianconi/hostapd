@@ -175,6 +175,19 @@ struct hostapd_channel_data {
 	 * punct_bitmap - RU puncturing bitmap
 	 */
 	u16 punct_bitmap;
+
+#ifdef CONFIG_AFC
+	/**
+	 * max eirp power spectral density received from the AFC
+	 * coordinator for the channel
+	 */
+	s8 max_eirp_psd;
+	/**
+	 * max eirp power received from the AFC coordinator
+	 * for the channel
+	 */
+	s8 max_eirp_power;
+#endif
 };
 
 #define HE_MAC_CAPAB_0		0

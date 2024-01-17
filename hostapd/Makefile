@@ -103,6 +103,12 @@ CFLAGS += -DCONFIG_TAXONOMY
 OBJS += ../src/ap/taxonomy.o
 endif
 
+ifdef CONFIG_AFC
+CFLAGS += -DCONFIG_AFC
+OBJS += ../src/ap/afc.o
+LIBS += -lcurl -ljson-c
+endif
+
 ifdef CONFIG_MODULE_TESTS
 CFLAGS += -DCONFIG_MODULE_TESTS
 OBJS += hapd_module_tests.o
