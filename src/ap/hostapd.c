@@ -728,6 +728,7 @@ void hostapd_cleanup_iface_partial(struct hostapd_iface *iface)
 static void hostapd_cleanup_iface(struct hostapd_iface *iface)
 {
 	wpa_printf(MSG_DEBUG, "%s(%p)", __func__, iface);
+	hostapd_afc_stop(iface);
 	eloop_cancel_timeout(hostapd_interface_setup_failure_handler, iface,
 			     NULL);
 
@@ -2581,6 +2582,16 @@ static int hostapd_setup_interface_complete_sync(struct hostapd_iface *iface,
 		}
 #endif /* CONFIG_MESH */
 
+#ifdef CONFIG_IEEE80211AX
+		/* check AFC for 6GHz channels. */
+		res = hostapd_afc_handle_request(iface);
+		if (res <= 0) {
+			if (res < 0)
+				goto fail;
+			return res;
+		}
+#endif /* CONFIG_IEEE80211AX */
+
 		if (!delay_apply_cfg &&
 		    hostapd_set_freq(hapd, hapd->iconf->hw_mode, iface->freq,
 				     hapd->iconf->channel,
@@ -2979,6 +2990,7 @@ void hostapd_interface_deinit(struct hostapd_iface *iface)
 
 	hostapd_set_state(iface, HAPD_IFACE_DISABLED);
 
+	hostapd_afc_stop(iface);
 	eloop_cancel_timeout(channel_list_update_timeout, iface, NULL);
 	iface->wait_channel_update = 0;
 	iface->is_no_ir = false;
@@ -3052,6 +3064,10 @@ void hostapd_interface_free(struct hostapd_iface *iface)
 			   __func__, iface->bss[j]);
 		os_free(iface->bss[j]);
 	}
+#ifdef CONFIG_AFC
+	os_free(iface->afc.chan_info_list);
+	os_free(iface->afc.freq_range);
+#endif
 	hostapd_cleanup_iface(iface);
 }
 

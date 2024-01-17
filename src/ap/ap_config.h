@@ -1252,6 +1252,53 @@ struct hostapd_config {
 
 	bool channel_usage;
 	bool peer_to_peer_twt;
+
+#ifdef CONFIG_AFC
+	struct {
+		char *socket;
+		struct {
+			char *version;
+			char *id;
+			char *sn;
+		} request;
+		unsigned int n_cert_ids;
+		struct cert_id {
+			char *rulset;
+			char *id;
+		} *cert_ids;
+		struct {
+			enum afc_location_type {
+				ELLIPSE,
+				LINEAR_POLYGON,
+				RADIAL_POLYGON,
+			} type;
+			unsigned int n_linear_polygon_data;
+			struct afc_linear_polygon {
+				double longitude;
+				double latitude;
+			} *linear_polygon_data;
+			unsigned int n_radial_polygon_data;
+			struct afc_radial_polygon {
+				double length;
+				double angle;
+			} *radial_polygon_data;
+			int major_axis;
+			int minor_axis;
+			int orientation;
+			double height;
+			char *height_type;
+			int vertical_tolerance;
+		} location;
+		unsigned int n_freq_range;
+		struct afc_freq_range {
+			int low_freq;
+			int high_freq;
+		} *freq_range;
+		unsigned int n_op_class;
+		unsigned int *op_class;
+		int min_power;
+	} afc;
+#endif /* CONFIG_AFC */
 };
 
 

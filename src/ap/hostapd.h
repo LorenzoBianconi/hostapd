@@ -744,9 +744,54 @@ struct hostapd_iface {
 	struct hostapd_multi_hw_info *multi_hw_info;
 	unsigned int num_multi_hws;
 	struct hostapd_multi_hw_info *current_hw_info;
+
+#ifdef CONFIG_AFC
+	struct {
+		int timeout;
+		unsigned int num_freq_range;
+		struct afc_freq_range_elem {
+			int low_freq;
+			int high_freq;
+			/**
+			 * max eirp power spectral density received from
+			 * the AFC coordinator for this band
+			 */
+			int max_psd;
+		} *freq_range;
+		unsigned int num_chan_info;
+		struct afc_chan_info_elem {
+			int chan;
+			/**
+			 * max eirp power received from the AFC coordinator
+			 * for this channel for each op_class
+			 */
+			int power[5];
+		} *chan_info_list;
+		bool data_valid;
+	} afc;
+#endif /* CONFIG_AFC */
 };
 
 /* hostapd.c */
+#ifdef CONFIG_AFC
+int hostapd_afc_handle_request(struct hostapd_iface *iface);
+void hostapd_afc_stop(struct hostapd_iface *iface);
+void hostap_afc_disable_channels(struct hostapd_iface *iface);
+#else
+static inline int hostapd_afc_handle_request(struct hostapd_iface *iface)
+{
+	return 1;
+}
+
+static inline void hostapd_afc_stop(struct hostapd_iface *iface)
+{
+}
+
+static inline void hostap_afc_disable_channels(struct hostapd_iface *iface)
+{
+}
+#endif /* CONFIG_AFC */
+
 int hostapd_for_each_interface(struct hapd_interfaces *interfaces,
 			       int (*cb)(struct hostapd_iface *iface,
 					 void *ctx), void *ctx);
