@@ -674,9 +674,38 @@ struct hostapd_iface {
 
 	/* Configured freq of interface is NO_IR */
 	bool is_no_ir;
+
+#ifdef CONFIG_AFC
+	struct {
+		bool data_valid;
+		bool completed;
+		unsigned int num_freq_range;
+		struct afc_freq_range_elem {
+			int low_freq;
+			int high_freq;
+			/**
+			 * max eirp power spectral density received from
+			 * the AFC coordinator for this band
+			 */
+			int max_psd;
+		} *freq_range;
+		unsigned int num_chan_info;
+		struct afc_chan_info_elem {
+			int chan;
+			/**
+			 * max eirp power received from the AFC coordinator
+			 * for this channel
+			 */
+			int power;
+		} *chan_info_list;
+	} afc;
+#endif /* CONFIG_AFC */
 };
 
 /* hostapd.c */
+void hostap_afc_disable_channels(struct hostapd_iface *iface);
+int hostapd_afc_handle_request(struct hostapd_iface *iface);
+
 int hostapd_for_each_interface(struct hapd_interfaces *interfaces,
 			       int (*cb)(struct hostapd_iface *iface,
 					 void *ctx), void *ctx);
