@@ -774,10 +774,19 @@ struct hostapd_iface {
 
 /* hostapd.c */
 #ifdef CONFIG_AFC
+int hostap_afc_get_chan_max_eirp_power(struct hostapd_iface *iface, bool psd,
+				       int *power);
 int hostapd_afc_handle_request(struct hostapd_iface *iface);
 void hostapd_afc_stop(struct hostapd_iface *iface);
 void hostap_afc_disable_channels(struct hostapd_iface *iface);
 #else
+static inline int
+hostap_afc_get_chan_max_eirp_power(struct hostapd_iface *iface, bool psd,
+				   int *power)
+{
+	return -EINVAL;
+}
+
 static inline int hostapd_afc_handle_request(struct hostapd_iface *iface)
 {
 	return 1;

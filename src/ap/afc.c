@@ -1107,3 +1107,44 @@ void hostap_afc_disable_channels(struct hostapd_iface *iface)
 			   chan->freq);
 	}
 }
+
+
+int hostap_afc_get_chan_max_eirp_power(struct hostapd_iface *iface, bool psd,
+				       int *power)
+{
+	int i;
+
+	if (!he_reg_is_sp(iface->conf->he_6ghz_reg_pwr_type))
+		return -EINVAL;
+
+	if (!iface->afc.data_valid)
+		return -EINVAL;
+
+	if (psd) {
+		for (i = 0; i < iface->afc.num_freq_range; i++) {
+			struct afc_freq_range_elem *f;
+
+			f = &iface->afc.freq_range[i];
+			if (iface->freq >= f->low_freq &&
+			    iface->freq <= f->high_freq) {
+				*power = 2 * f->max_psd;
+				return 0;
+			}
+		}
+	} else {
+		for (i = 0; i < iface->afc.num_chan_info; i++) {
+			struct afc_chan_info_elem *c;
+
+			c = &iface->afc.chan_info_list[i];
+			if (c->chan == iface->conf->channel) {
+				int j;
+
+				*power = 0;
+				for (j = 0; j < ARRAY_SIZE(c->power); j++)
+					*power = MAX(*power, 2 * c->power[j]);
+				return 0;
+			}
+		}
+	}
+	return -EINVAL;
+}
