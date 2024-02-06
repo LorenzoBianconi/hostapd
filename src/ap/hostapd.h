@@ -703,6 +703,8 @@ struct hostapd_iface {
 };
 
 /* hostapd.c */
+int hostap_afc_get_chan_max_eirp_power(struct hostapd_iface *iface, bool psd,
+				       int *power);
 void hostap_afc_disable_channels(struct hostapd_iface *iface);
 int hostapd_afc_handle_request(struct hostapd_iface *iface);
 
