@@ -4424,3 +4424,36 @@ struct hostapd_data * hostapd_mld_get_link_bss(struct hostapd_data *hapd,
 	return NULL;
 }
 #endif /* CONFIG_IEEE80211BE */
+
+
+int hostap_afc_get_chan_max_eirp_power(struct hostapd_iface *iface, bool psd,
+				       int *power)
+{
+#ifdef CONFIG_AFC
+	struct hostapd_hw_modes *mode = iface->current_mode;
+	int i;
+
+	if (!he_reg_is_sp(iface->conf->he_6ghz_reg_pwr_type))
+		return -EINVAL;
+
+	if (!mode)
+		return -EINVAL;
+
+	if (!iface->afc_completed)
+		return -EINVAL;
+
+	for (i = 0; i < mode->num_channels; i++) {
+		struct hostapd_channel_data *chan = &mode->channels[i];
+
+		if (chan->freq == iface->freq) {
+			int val;
+
+			val = psd ? chan->max_eirp_psd : chan->max_eirp_power;
+			*power = 2 * val;
+
+			return 0;
+		}
+	}
+#endif /* CONFIG_AFC */
+	return -EINVAL;
+}
