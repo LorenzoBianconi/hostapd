@@ -7069,42 +7069,53 @@ u8 * hostapd_eid_txpower_envelope(struct hostapd_data *hapd, u8 *eid)
 	 */
 	if (is_6ghz_op_class(iconf->op_class)) {
 		enum max_tx_pwr_interpretation tx_pwr_intrpn;
+		int err, max_eirp_psd, max_eirp_power;
 
 		/* Same Maximum Transmit Power for all 20 MHz bands */
 		tx_pwr_count = 0;
 		tx_pwr_intrpn = REGULATORY_CLIENT_EIRP_PSD;
 
 		/* Default Transmit Power Envelope for Global Operating Class */
-		if (hapd->iconf->reg_def_cli_eirp_psd != -1)
-			tx_pwr = hapd->iconf->reg_def_cli_eirp_psd;
-		else
-			tx_pwr = REG_PSD_MAX_TXPOWER_FOR_DEFAULT_CLIENT * 2;
+		err = hostap_afc_get_chan_max_eirp_power(iface, true,
+							 &max_eirp_psd);
+		if (err < 0) {
+			if (hapd->iconf->reg_def_cli_eirp_psd != -1)
+				max_eirp_psd = hapd->iconf->reg_def_cli_eirp_psd;
+			else
+				max_eirp_psd = REG_PSD_MAX_TXPOWER_FOR_DEFAULT_CLIENT * 2;
+		}
 
 		eid = hostapd_add_tpe_info(eid, tx_pwr_count, tx_pwr_intrpn,
-					   REG_DEFAULT_CLIENT, tx_pwr);
+					   REG_DEFAULT_CLIENT, max_eirp_psd);
 
 		/* Indoor Access Point must include an additional TPE for
 		 * subordinate devices */
 		if (he_reg_is_indoor(iconf->he_6ghz_reg_pwr_type)) {
-			/* TODO: Extract PSD limits from channel data */
-			if (hapd->iconf->reg_sub_cli_eirp_psd != -1)
-				tx_pwr = hapd->iconf->reg_sub_cli_eirp_psd;
-			else
-				tx_pwr = REG_PSD_MAX_TXPOWER_FOR_SUBORDINATE_CLIENT * 2;
+			if (err < 0) {
+				/* non-AFC connection */
+				if (hapd->iconf->reg_sub_cli_eirp_psd != -1)
+					max_eirp_psd = hapd->iconf->reg_sub_cli_eirp_psd;
+				else
+					max_eirp_psd = REG_PSD_MAX_TXPOWER_FOR_SUBORDINATE_CLIENT * 2;
+			}
 			eid = hostapd_add_tpe_info(eid, tx_pwr_count,
 						   tx_pwr_intrpn,
 						   REG_SUBORDINATE_CLIENT,
-						   tx_pwr);
+						   max_eirp_psd);
 		}
 
-		if (iconf->reg_def_cli_eirp != -1 &&
-		    he_reg_is_sp(iconf->he_6ghz_reg_pwr_type))
-			eid = hostapd_add_tpe_info(
-				eid, tx_pwr_count, REGULATORY_CLIENT_EIRP,
-				REG_DEFAULT_CLIENT,
-				hapd->iconf->reg_def_cli_eirp);
+		if (hostap_afc_get_chan_max_eirp_power(iface, false,
+						       &max_eirp_power)) {
+			max_eirp_power = iconf->reg_def_cli_eirp;
+			if (max_eirp_power == -1 ||
+			    !he_reg_is_sp(iconf->he_6ghz_reg_pwr_type))
+				return eid;
+		}
 
-		return eid;
+		return hostapd_add_tpe_info(eid, tx_pwr_count,
+					    REGULATORY_CLIENT_EIRP,
+					    REG_DEFAULT_CLIENT,
+					    max_eirp_power);
 	}
 #endif /* CONFIG_IEEE80211AX */
 
