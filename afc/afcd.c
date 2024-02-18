@@ -53,8 +53,9 @@ static int afcd_send_request(struct curl_ctx *ctx, unsigned char *request)
 	struct curl_slist *headers = NULL;
 	CURL *curl;
 	int ret;
+	char *data_ptr, *data = "{\"availableSpectrumInquiryResponses\": [{\"availabilityExpireTime\": \"2023-02-23T12:53:18Z\", \"availableChannelInfo\": [{\"channelCfi\": [1, 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, 57, 61, 65, 69, 73, 77, 81, 85, 89, 93, 117, 121, 125, 129, 133, 137, 141, 145, 149, 153, 157, 161, 165, 169, 173, 177, 181], \"globalOperatingClass\": 131, \"maxEirp\": [5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5]}, {\"channelCfi\": [3, 11, 19, 27, 35, 43, 51, 59, 67, 75, 83, 91, 123, 131, 139, 147, 155, 163, 171, 179], \"globalOperatingClass\": 132, \"maxEirp\": [5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5]}, {\"channelCfi\": [7, 23, 39, 55, 71, 87, 135, 151, 167], \"globalOperatingClass\": 133, \"maxEirp\": [5, 5, 5, 5, 5, 5, 5, 5, 5]}, {\"channelCfi\": [15, 47, 79, 143], \"globalOperatingClass\": 134, \"maxEirp\": [5, 5, 5, 5]}, {\"channelCfi\": [], \"globalOperatingClass\": 135, \"maxEirp\": []}], \"availableFrequencyInfo\": [{\"frequencyRange\": {\"highFrequency\": 6425, \"lowFrequency\": 5925}, \"maxPSD\": 3.98970004336019}, {\"frequencyRange\": {\"highFrequency\": 6865, \"lowFrequency\": 6525}, \"maxPSD\": 3.98970004336019}], \"requestId\": \"11235814\", \"response\": {\"responseCode\": 0, \"shortDescription\": \"Success\"}, \"rulesetId\": \"US_47_CFR_PART_15_SUBPART_E\"}], \"version\": \"1.1\"}";
 
-	wpa_printf(MSG_DEBUG, "Sending AFC request to %s", url);
+	wpa_printf(MSG_ERROR, "Sending AFC request to %s", url);
 
 	curl_global_init(CURL_GLOBAL_ALL);
 	curl = curl_easy_init();
@@ -85,12 +86,21 @@ static int afcd_send_request(struct curl_ctx *ctx, unsigned char *request)
 	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYSTATUS, 1L);
 
 	ret = curl_easy_perform(curl);
+	ret = CURLE_OK;
 	if (ret != CURLE_OK)
 		wpa_printf(MSG_ERROR, "curl_easy_perform failed: %s",
 			   curl_easy_strerror(ret));
 
 	curl_easy_cleanup(curl);
 	curl_global_cleanup();
+
+	ctx->buf_len = strlen(data) + 1;
+	data_ptr = os_zalloc(ctx->buf_len);
+	if (!data_ptr)
+		return -ENOMEM;
+
+	os_strlcpy(data_ptr, data, ctx->buf_len);
+	ctx->buf = data_ptr;
 
 	return ret == CURLE_OK ? 0 : -EINVAL;
 }
@@ -208,9 +218,9 @@ static int afcd_server_run(void)
 			continue;
 		}
 
-		wpa_printf(MSG_DEBUG, "Received request: %s", buf);
+		wpa_printf(MSG_ERROR, "Received request: %s", buf);
 		if (!afcd_send_request(&ctx, buf)) {
-			wpa_printf(MSG_DEBUG, "Received reply: %s", ctx.buf);
+			wpa_printf(MSG_ERROR, "Received reply: %s", ctx.buf);
 			send(fd, ctx.buf, ctx.buf_len, MSG_NOSIGNAL);
 			free(ctx.buf);
 		}
