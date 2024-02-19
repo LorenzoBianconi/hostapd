@@ -417,7 +417,7 @@ hostapd_afc_build_request(struct hostapd_iface *iface)
 
 	json_object_object_add(l2_obj, "inquiredChannels", op_class_list_obj);
 
-	wpa_printf(MSG_DEBUG, "Pending AFC request: %s",
+	wpa_printf(MSG_ERROR, "Pending AFC request: %s",
 		   json_object_get_string(l1_obj));
 
 	return l1_obj;
@@ -617,7 +617,7 @@ static int hostapd_afc_parse_reply(struct hostapd_iface *iface, char *reply)
 	struct hostapd_config *iconf = iface->conf;
 	int i, request_timeout = -1, ret = -EINVAL;
 
-	wpa_printf(MSG_DEBUG, "Received AFC reply: %s", reply);
+	wpa_printf(MSG_ERROR, "Received AFC reply: %s", reply);
 	payload_obj = json_tokener_parse(reply);
 	if (!payload_obj)
 		return -EINVAL;
@@ -671,7 +671,7 @@ static int hostapd_afc_parse_reply(struct hostapd_iface *iface, char *reply)
 
 		if (json_object_object_get_ex(obj, "shortDescription",
 					      &status_obj))
-			wpa_printf(MSG_DEBUG, "AFC reply element %d: %s",
+			wpa_printf(MSG_ERROR, "AFC reply element %d: %s",
 				   i, json_object_get_string(status_obj));
 
 		if (json_object_object_get_ex(obj, "responseCode",
