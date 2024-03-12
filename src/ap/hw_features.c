@@ -995,7 +995,7 @@ static bool hostapd_is_usable_punct_bitmap(struct hostapd_iface *iface)
  * 0 = not usable
  * -1 = not currently usable due to 6 GHz NO-IR
  */
-static int hostapd_is_usable_chans(struct hostapd_iface *iface)
+int hostapd_is_usable_chans(struct hostapd_iface *iface)
 {
 	int secondary_freq;
 	struct hostapd_channel_data *pri_chan;
