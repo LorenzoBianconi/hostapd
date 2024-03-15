@@ -678,6 +678,8 @@ struct hostapd_iface {
 
 #ifdef CONFIG_AFC
 	struct {
+		int cur_freq;
+
 		int timeout;
 		unsigned int num_freq_range;
 		struct afc_freq_range_elem {

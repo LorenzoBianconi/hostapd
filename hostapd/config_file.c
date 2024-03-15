@@ -4048,6 +4048,8 @@ static int hostapd_config_fill(struct hostapd_config *conf,
 		}
 		bss->unsol_bcast_probe_resp_interval = val;
 #ifdef CONFIG_AFC
+	} else if (os_strcmp(buf, "afc_disable_freq_test") == 0) {
+		conf->afc.disable_freq_test = atoi(pos);
 	} else if (os_strcmp(buf, "afcd_sock") == 0) {
 		conf->afc.socket = os_malloc(os_strlen(pos) + 1);
 		if (!conf->afc.socket)

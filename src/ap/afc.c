@@ -17,7 +17,8 @@
 #include "acs.h"
 #include "hw_features.h"
 
-#define HOSTAPD_AFC_RETRY_TIMEOUT	180
+#define HOSTAPD_AFC_RETRY_TIMEOUT_VALID 60;
+#define HOSTAPD_AFC_RETRY_TIMEOUT	120
 #define HOSTAPD_AFC_TIMEOUT		86400 /* 24h */
 #define HOSTAPD_AFC_BUFSIZE		4096
 
@@ -822,6 +823,8 @@ int hostapd_afc_handle_request(struct hostapd_iface *iface)
 	struct hostapd_config *iconf = iface->conf;
 	int ret;
 
+	wpa_printf(MSG_ERROR, "[%s-%d]", __func__, __LINE__);
+
 	/* AFC is required just for standard power AP */
 	if (!he_reg_is_sp(iconf->he_6ghz_reg_pwr_type))
 		return 1;
@@ -844,14 +847,18 @@ int hostapd_afc_handle_request(struct hostapd_iface *iface)
 		goto resched;
 	}
 
+	iface->afc.cur_freq = iface->freq;
 	hostap_afc_disable_channels(iface);
-	if (!hostapd_afc_has_usable_chans(iface))
+	if (!hostapd_afc_has_usable_chans(iface)) {
+		wpa_printf(MSG_ERROR, "[%s-%d]: NO USABLE CHANNELS - RESCHED", __func__, __LINE__);
 		goto resched;
+	}
 
 	/* Trigger an ACS freq scan */
 	iconf->channel = 0;
 	iface->freq = 0;
 
+	wpa_printf(MSG_ERROR, "[%s-%d]: START ACS", __func__, __LINE__);
 	if (acs_init(iface) != HOSTAPD_CHAN_ACS) {
 		wpa_printf(MSG_ERROR, "Could not start ACS");
 		ret = -EINVAL;
@@ -898,20 +905,28 @@ static void hostapd_afc_timeout_handler(void *eloop_ctx, void *timeout_ctx)
 		goto restart_interface;
 	}
 
-	if (hostapd_is_usable_chans(iface))
+	if (hostapd_is_usable_chans(iface)) {
+		wpa_printf(MSG_ERROR, "[%s-%d]: CHAN %d IS VALID", __func__, __LINE__, iface->freq);
+		iface->afc.timeout = HOSTAPD_AFC_RETRY_TIMEOUT_VALID;
 		goto resched;
+	}
 
 	restart_iface = hostapd_afc_has_usable_chans(iface);
 	if (restart_iface) {
 		/* Trigger an ACS freq scan */
 		iface->conf->channel = 0;
 		iface->freq = 0;
+	} else {
+		wpa_printf(MSG_ERROR, "[%s-%d]: NO USABLE CHANNELS - DISABLE", __func__, __LINE__);
 	}
 
 restart_interface:
+	wpa_printf(MSG_ERROR, "[%s-%d]: DISABLING INTERFACE", __func__, __LINE__);
 	hostapd_disable_iface(iface);
-	if (restart_iface)
+	if (restart_iface) {
+		wpa_printf(MSG_ERROR, "[%s-%d]: ENABLING INTERFACE", __func__, __LINE__);
 		hostapd_enable_iface(iface);
+	}
 resched:
 	eloop_register_timeout(iface->afc.timeout, 0,
 			       hostapd_afc_timeout_handler, iface, NULL);

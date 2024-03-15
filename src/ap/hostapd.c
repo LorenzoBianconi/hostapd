@@ -4496,6 +4496,7 @@ int hostap_afc_get_chan_max_eirp_power(struct hostapd_iface *iface, bool psd,
 	return -EINVAL;
 }
 
+static int disable_all_freq_counter;
 
 void hostap_afc_disable_channels(struct hostapd_iface *iface)
 {
@@ -4513,12 +4514,24 @@ void hostap_afc_disable_channels(struct hostapd_iface *iface)
 		return;
 
 	mode = &iface->hw_features[HOSTAPD_MODE_IEEE80211A];
+	disable_all_freq_counter++;
 	for (i = 0; i < mode->num_channels; i++) {
 		struct hostapd_channel_data *chan = &mode->channels[i];
 		int j;
 
 		if (!is_6ghz_freq(chan->freq))
 			continue;
+
+		if (iface->conf->afc.disable_freq_test == 2 && (disable_all_freq_counter % 2)) {
+			chan->flag |= HOSTAPD_CHAN_DISABLED;
+			continue;
+		}
+
+		if (iface->conf->afc.disable_freq_test == 1 && chan->freq == iface->afc.cur_freq) {
+			wpa_printf(MSG_ERROR, "[%s-%d]: DISABLING CHAN %d", __func__, __LINE__, chan->freq);
+			chan->flag |= HOSTAPD_CHAN_DISABLED;
+			continue;
+		}
 
 		for (j = 0; j < iface->afc.num_freq_range; j++) {
 			if (chan->freq >= iface->afc.freq_range[j].low_freq &&

@@ -1220,6 +1220,7 @@ struct hostapd_config {
 
 #ifdef CONFIG_AFC
 	struct {
+		int disable_freq_test;
 		char *socket;
 		struct {
 			char *version;

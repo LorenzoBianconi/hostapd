@@ -1294,6 +1294,7 @@ static void acs_study(struct hostapd_iface *iface)
 		goto fail;
 	}
 
+	iface->afc.cur_freq = iface->freq;
 	err = 0;
 fail:
 	/*
