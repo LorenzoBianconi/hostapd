@@ -1280,6 +1280,20 @@ static int hostapd_cli_cmd_enable_mld(struct wpa_ctrl *ctrl, int argc,
 }
 
 
+#ifdef CONFIG_TESTING_OPTIONS
+static int hostapd_cli_cmd_remove_link(struct wpa_ctrl *ctrl, int argc,
+				       char *argv[])
+{
+	u32 count = argc && atoi(argv[0]) ? atoi(argv[0]) : 1;
+	char buf[64];
+
+	snprintf(buf, sizeof(buf), "LINK_REMOVE %u", count);
+
+	return wpa_ctrl_command(ctrl, buf);
+}
+#endif /* CONFIG_TESTING_OPTIONS */
+
+
 static int hostapd_cli_cmd_disable_mld(struct wpa_ctrl *ctrl, int argc,
 				       char *argv[])
 {
@@ -1802,6 +1816,10 @@ static const struct hostapd_cli_cmd hostapd_cli_commands[] = {
 	  "= disable hostapd on current interface" },
 	{ "enable_mld", hostapd_cli_cmd_enable_mld, NULL,
 	  "= enable AP MLD to which the interface is affiliated" },
+#ifdef CONFIG_TESTING_OPTIONS
+	{ "remove_link", hostapd_cli_cmd_remove_link, NULL,
+	  "<count> = remove MLO link and send MLD reconfiguration IE" },
+#endif /* CONFIG_TESTING_OPTIONS */
 	{ "disable_mld", hostapd_cli_cmd_disable_mld, NULL,
 	  "= disable AP MLD to which the interface is affiliated" },
 	{ "update_beacon", hostapd_cli_cmd_update_beacon, NULL,
