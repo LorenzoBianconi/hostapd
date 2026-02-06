@@ -1198,6 +1198,9 @@ static int wiphy_info_handler(struct nl_msg *msg, void *arg)
 	if (tb[NL80211_ATTR_MLO_SUPPORT])
 		capa->flags2 |= WPA_DRIVER_FLAGS2_MLO;
 
+	if (tb[NL80211_ATTR_MLO_RECONF_ADV_OFFLOAD])
+		capa->flags2 |= WPA_DRIVER_FLAGS2_MLO_RECONF_ADV_OFFLOAD;
+
 #ifdef CONFIG_NAN
 	if (tb[NL80211_ATTR_BANDS]) {
 		u32 bands;

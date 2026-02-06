@@ -2930,6 +2930,12 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
 			   hapd->conf->iface);
 		hostapd_mld_interface_freed(hapd);
 		break;
+#ifdef CONFIG_TESTING_OPTIONS
+	case EVENT_MLO_RECONF_ADV_OFFLOAD_DONE:
+		hostapd_mlo_reconf_adv_offload_done(hapd,
+				data->mlo_reconfig_adv.links_bitmap);
+		break;
+#endif /* CONFIG_TESTING_OPTIONS */
 #endif /* CONFIG_IEEE80211BE */
 	default:
 		wpa_printf(MSG_DEBUG, "Unknown event %d", event);

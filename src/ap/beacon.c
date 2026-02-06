@@ -2736,6 +2736,14 @@ static int __ieee802_11_set_beacon(struct hostapd_data *hapd)
 		return -1;
 	}
 
+#ifdef CONFIG_IEEE80211BE
+	if (hapd->mld_link_reconf_adv_in_progress) {
+		wpa_printf(MSG_ERROR,
+			   "Cannot set beacons during link reconfiguration");
+		return -1;
+	}
+#endif /* CONFIG_IEEE80211BE */
+
 #ifdef CONFIG_IEEE80211AX
 	if (hapd->cca_in_progress) {
 		wpa_printf(MSG_ERROR,

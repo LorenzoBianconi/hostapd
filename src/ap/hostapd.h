@@ -509,6 +509,7 @@ struct hostapd_data {
 	 * total, additional 7 characters required. */
 	char ctrl_sock_iface[IFNAMSIZ + 7 + 1];
 
+	int mld_link_reconf_adv_in_progress;
 #ifdef CONFIG_TESTING_OPTIONS
 	u8 eht_mld_link_removal_count;
 #endif /* CONFIG_TESTING_OPTIONS */
@@ -882,6 +883,10 @@ void hostapd_refresh_all_iface_beacons(struct hostapd_iface *hapd_iface);
 
 bool hostapd_mld_is_first_bss(struct hostapd_data *hapd);
 void hostapd_mld_interface_freed(struct hostapd_data *hapd);
+#ifdef CONFIG_TESTING_OPTIONS
+void hostapd_mlo_reconf_adv_offload_done(struct hostapd_data *hapd,
+					 u16 links_bitmap);
+#endif /* CONFIG_TESTING_OPTIONS */
 
 #define for_each_mld_link(partner, self) \
 	dl_list_for_each(partner, &self->mld->links, struct hostapd_data, link)

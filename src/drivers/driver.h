@@ -2435,6 +2435,8 @@ struct wpa_driver_capa {
 #define WPA_DRIVER_FLAGS2_NON_TRIGGER_BASED_INITIATOR	0x0000000040000000ULL
 /** Driver supports NAN Device interface and NAN Synchronization */
 #define WPA_DRIVER_FLAGS2_SUPPORT_NAN			0x0000000080000000ULL
+/** Driver supports MLO link reconfiguration offloading */
+#define WPA_DRIVER_FLAGS2_MLO_RECONF_ADV_OFFLOAD	0x0000000100000000ULL
 	u64 flags2;
 
 #define FULL_AP_CLIENT_STATE_SUPP(drv_flags) \
@@ -6298,6 +6300,12 @@ enum wpa_event_type {
 	 * The event data includes the DW frequency.
 	 */
 	EVENT_NAN_NEXT_DW,
+
+	/**
+	 * EVENT_MLO_RECONF_ADV_OFFLOAD_DONE - AP MLO link reconfiguration
+	 * completion event
+	 */
+	EVENT_MLO_RECONF_ADV_OFFLOAD_DONE,
 };
 
 
@@ -7306,6 +7314,10 @@ union wpa_event_data {
 	struct nan_next_dw_info {
 		int freq;
 	} nan_next_dw_info;
+
+	struct mlo_reconfig_adv {
+		u16 links_bitmap;
+	} mlo_reconfig_adv;
 };
 
 /**

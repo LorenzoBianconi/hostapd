@@ -191,6 +191,7 @@ static const char * nl80211_command_to_string(enum nl80211_commands cmd)
 	C2S(NL80211_CMD_EPCS_CFG)
 	C2S(NL80211_CMD_NAN_NEXT_DW_NOTIFICATION)
 	C2S(NL80211_CMD_NAN_CLUSTER_JOINED)
+	C2S(NL80211_CMD_MLO_RECONF_ADV_OFFLOAD_EVENT)
 	C2S(__NL80211_CMD_AFTER_LAST)
 	}
 #undef C2S
@@ -4185,6 +4186,41 @@ static void nl80211_nan_next_dw_event(struct wpa_driver_nl80211_data *drv,
 #endif /* CONFIG_NAN */
 
 
+static void
+nl80211_mlo_reconf_adv_offload_event(struct wpa_driver_nl80211_data *drv,
+				     struct nlattr **tb)
+{
+#ifdef CONFIG_IEEE80211BE
+	union wpa_event_data data = {};
+	struct nlattr *link;
+	int rem_links;
+
+	if (!tb[NL80211_ATTR_MLO_LINKS])
+		return;
+
+	nla_for_each_nested(link, tb[NL80211_ATTR_MLO_LINKS], rem_links) {
+		struct nlattr *link_attrs[NL80211_ATTR_MAX + 1];
+		int link_id;
+
+		nla_parse(link_attrs, NL80211_ATTR_MAX, nla_data(link),
+			  nla_len(link), NULL);
+		if (!link_attrs[NL80211_ATTR_MLO_LINK_ID])
+			continue;
+
+		link_id = nla_get_u8(link_attrs[NL80211_ATTR_MLO_LINK_ID]);
+		if (link_id >= MAX_NUM_MLD_LINKS)
+			continue;
+
+		data.mlo_reconfig_adv.links_bitmap |= BIT(link_id);
+	}
+
+	wpa_printf(MSG_DEBUG, "nl80211: MLO link reconf completion event");
+	wpa_supplicant_event(drv->ctx, EVENT_MLO_RECONF_ADV_OFFLOAD_DONE,
+			     &data);
+#endif /* CONFIG_IEEE80211BE */
+}
+
+
 static void do_process_drv_event(struct i802_bss *bss, int cmd,
 				 struct nlattr **tb)
 {
@@ -4465,6 +4501,9 @@ static void do_process_drv_event(struct i802_bss *bss, int cmd,
 		nl80211_nan_next_dw_event(drv, tb);
 		break;
 #endif /* CONFIG_NAN */
+	case NL80211_CMD_MLO_RECONF_ADV_OFFLOAD_EVENT:
+		nl80211_mlo_reconf_adv_offload_event(drv, tb);
+		break;
 	default:
 		wpa_dbg(drv->ctx, MSG_DEBUG, "nl80211: Ignored unknown event "
 			"(cmd=%d)", cmd);
